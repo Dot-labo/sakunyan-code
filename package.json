@@ -1,0 +1,23 @@
+{
+  "name": "sakunyan",
+  "version": "0.1.0",
+  "description": "初心者向けのコーディングエージェント",
+  "type": "module",
+  "bin": {
+    "sakunyan": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}
