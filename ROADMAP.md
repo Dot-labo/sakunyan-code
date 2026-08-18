@@ -4,16 +4,37 @@ README の設計方針に基づく実装順序。先の機能のための過剰�
 
 ## Phase 0：技術検証
 
-- [ ] pi の対象バージョンを決める
-- [ ] pi の npm パッケージを依存関係として組み込めることを確認する
-- [ ] macOS で pi を起動する
-- [ ] Windows + Git Bash で pi を起動する
-- [ ] OpenRouter の指定モデルに接続する
+- [x] pi の対象バージョンを `@earendil-works/pi-coding-agent@0.84.2` に決める
+- [x] pi の npm パッケージを依存関係として組み込めることを確認する
+- [x] macOS で pi を起動する
+- [ ] Windows + Git Bash で pi を起動する（Windows 環境を用意できるまで保留）
+- [ ] OpenRouter の指定モデルに接続する（API キーと採用モデルが未決定）
 - [ ] 日本語入力・表示を確認する
-- [ ] pi の拡張機能から system prompt、status、widget を変更できることを確認する
-- [ ] pi の標準ツールを sakunyan の起動経路から利用できることを確認する
+- [x] pi の拡張機能から system prompt、status、widget を変更できることを確認する
+- [ ] pi の標準ツールを sakunyan の起動経路から利用できることを確認する（pi 単体では確認済み、ランチャー未実装）
 
 完了条件：macOS と Windows の両方で、固定した pi が実モデルと会話できる。
+
+### 調査結果（2026-08-18、macOS）
+
+検証環境：Apple Silicon macOS、Node.js 24.13.0、npm 11.6.2。
+
+- 公式 npm パッケージの現行版 `@earendil-works/pi-coding-agent@0.84.2` を一時ディレクトリへ導入し、CLI が起動することを確認した。リポジトリにはまだ依存関係を追加していない。
+- 旧 `@mariozechner/pi-coding-agent` は 0.73.1 で非推奨となっているため採用しない。
+- 0.84.2 は Node.js 22.19.0 以上を要求する。現在の `package.json` は Node.js 20 以上としているため、Phase 1 で `engines.node` を合わせる必要がある。Node.js 20 を維持する場合の最終版は `legacy-node20` タグの 0.74.2。
+- pi は OpenRouter を標準 provider として持ち、`OPENROUTER_API_KEY`、`--provider openrouter`、`--model <model-id>` を利用できる。今回はキーが環境に存在せず、運営側の採用モデルも未決定なので実 API 接続は未検証。
+- system prompt は `--system-prompt` / `--append-system-prompt` または `before_agent_start` 拡張イベントで変更できる。
+- 拡張 API に `ctx.ui.setStatus()`、`ctx.ui.setWidget()`、`ctx.ui.setWorkingMessage()` があり、予定している状態表示と常設表示を実装できる。
+- 標準ツールは `read`、`bash`、`edit`、`write`。CLI/SDK の双方から利用でき、対象フォルダは pi プロセスの `cwd` で指定できる。
+- 拡張、テーマ、system prompt は CLI 引数で明示的に読み込めるため、pi 本体をフォークせず sakunyan のランチャーから固定構成を渡す方針で問題ない。
+- 日本語の実入力・応答表示は実モデル接続と同時に確認する。Windows 検証は今回の対象外。
+
+参考資料：
+
+- [pi 公式 README](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/README.md)
+- [Extensions 公式ドキュメント](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md)
+- [Providers 公式ドキュメント](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/providers.md)
+- [npm: @earendil-works/pi-coding-agent](https://www.npmjs.com/package/@earendil-works/pi-coding-agent)
 
 ## Phase 1：最小 sakunyan
 
