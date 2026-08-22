@@ -11,7 +11,7 @@ README の設計方針に基づく実装順序。先の機能のための過剰�
 - [ ] OpenRouter の指定モデルに接続する（API キーと採用モデルが未決定）
 - [ ] 日本語入力・表示を確認する
 - [x] pi の拡張機能から system prompt、status、widget を変更できることを確認する
-- [ ] pi の標準ツールを sakunyan の起動経路から利用できることを確認する（pi 単体では確認済み、ランチャー未実装）
+- [ ] pi の標準ツールを sakunyan の起動経路から利用できることを確認する（ランチャー起動まで確認済み、ツール実行は未確認）
 
 完了条件：macOS と Windows の両方で、固定した pi が実モデルと会話できる。
 
@@ -19,9 +19,9 @@ README の設計方針に基づく実装順序。先の機能のための過剰�
 
 検証環境：Apple Silicon macOS、Node.js 24.13.0、npm 11.6.2。
 
-- 公式 npm パッケージの現行版 `@earendil-works/pi-coding-agent@0.84.2` を一時ディレクトリへ導入し、CLI が起動することを確認した。リポジトリにはまだ依存関係を追加していない。
+- 公式 npm パッケージの `@earendil-works/pi-coding-agent@0.84.2` を固定依存として追加し、CLI が起動することを確認した。
 - 旧 `@mariozechner/pi-coding-agent` は 0.73.1 で非推奨となっているため採用しない。
-- 0.84.2 は Node.js 22.19.0 以上を要求する。現在の `package.json` は Node.js 20 以上としているため、Phase 1 で `engines.node` を合わせる必要がある。Node.js 20 を維持する場合の最終版は `legacy-node20` タグの 0.74.2。
+- 0.84.2 の要件に合わせ、`package.json` の `engines.node` を Node.js 22.19.0 以上へ更新した。Node.js 20 を維持する場合の最終版は `legacy-node20` タグの 0.74.2。
 - pi は OpenRouter を標準 provider として持ち、`OPENROUTER_API_KEY`、`--provider openrouter`、`--model <model-id>` を利用できる。今回はキーが環境に存在せず、運営側の採用モデルも未決定なので実 API 接続は未検証。
 - system prompt は `--system-prompt` / `--append-system-prompt` または `before_agent_start` 拡張イベントで変更できる。
 - 拡張 API に `ctx.ui.setStatus()`、`ctx.ui.setWidget()`、`ctx.ui.setWorkingMessage()` があり、予定している状態表示と常設表示を実装できる。
@@ -39,13 +39,13 @@ README の設計方針に基づく実装順序。先の機能のための過剰�
 ## Phase 1：最小 sakunyan
 
 - [x] TypeScript の npm パッケージを作成する
-- [ ] `sakunyan` コマンドを提供する
+- [x] `sakunyan` コマンドを提供する
 - [ ] 対象フォルダを引数で受け取る（`sakunyan .`、`sakunyan <path>`）
 - [ ] 引数がない場合は現在のフォルダを対象にする
 - [ ] ホームフォルダ起動時の案内・プロジェクト選択を設計する
-- [ ] pi のバージョンを固定する
+- [x] pi のバージョンを固定する
 - [ ] sakunyan 専用の設定・拡張・テーマを読み込む
-- [ ] `sakunyan` から同梱依存の pi を起動する
+- [x] `sakunyan` から同梱依存の pi を起動する
 - [ ] sakunyan の system prompt を追加する
 - [ ] OpenRouter の provider とデフォルトモデルを設定する
 - [ ] セットアップ待機画面を表示する

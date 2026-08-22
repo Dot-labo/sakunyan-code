@@ -1,11 +1,8 @@
 #!/usr/bin/env node
 
-/**
- * sakunyan の CLI エントリーポイント。
- * 起動処理は Phase 1 の後続ステップで実装する。
- */
-export function main(): void {
-  process.stdout.write("sakunyan: 起動処理は準備中です。\n");
-}
+import { main } from "@earendil-works/pi-coding-agent";
 
-main();
+process.env.PI_CODING_AGENT = "true";
+process.env.AI_AGENT = "pi";
+
+await main(process.argv.slice(2));
