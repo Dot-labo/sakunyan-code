@@ -2,6 +2,17 @@ const paint = (code: string, text: string, color: boolean) =>
   color ? `\x1b[${code}m${text}\x1b[0m` : text;
 
 export const messages = {
+  unsupportedNodeVersion: (current: string, required: string, color = false) => `${paint("1;31", "❌ Node.jsのバージョンが古いため、sakunyanを起動できません。", color)}
+
+現在のバージョン： ${paint("33", `v${current}`, color)}
+必要なバージョン： ${paint("32", `v${required} 以上`, color)}
+
+Node.jsを更新してから、もう一度実行してください：
+  ${paint("36", "https://nodejs.org/ja/download", color)}
+
+更新できたか確認するコマンド：
+  ${paint("33", "node --version", color)}
+`,
   targetRequired: (currentDirectory: string, color = false) => `${paint("1;32", "🐱 sakunyan code へようこそ！", color)}
 
 ${paint("36", "今いるフォルダはここだよ：", color)}

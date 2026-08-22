@@ -1,21 +1,32 @@
 #!/usr/bin/env node
 
-import { main } from "@earendil-works/pi-coding-agent";
 import { statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { messages } from "./messages.js";
+import { MIN_NODE_VERSION, supportsNodeVersion } from "./node-version.js";
 
 process.env.PI_CODING_AGENT = "true";
 process.env.AI_AGENT = "pi";
 
-const [inputPath, ...args] = process.argv.slice(2);
 const useColor = Boolean(process.stderr.isTTY && !("NO_COLOR" in process.env) && process.env.TERM !== "dumb");
 
-if (!inputPath) {
-  process.stderr.write(messages.targetRequired(process.cwd(), useColor));
+if (!supportsNodeVersion(process.versions.node)) {
+  process.stderr.write(messages.unsupportedNodeVersion(process.versions.node, MIN_NODE_VERSION, useColor));
   process.exitCode = 1;
 } else {
+  await run();
+}
+
+async function run(): Promise<void> {
+  const [inputPath, ...args] = process.argv.slice(2);
+
+  if (!inputPath) {
+    process.stderr.write(messages.targetRequired(process.cwd(), useColor));
+    process.exitCode = 1;
+    return;
+  }
+
   const targetPath = resolve(
     inputPath === "~" || inputPath.startsWith("~/") || inputPath.startsWith("~\\")
       ? `${homedir()}${inputPath.slice(1)}`
@@ -39,6 +50,7 @@ if (!inputPath) {
 
   if (isDirectory) {
     process.chdir(targetPath);
+    const { main } = await import("@earendil-works/pi-coding-agent");
     await main(args);
   } else if (process.exitCode === undefined) {
     process.stderr.write(messages.targetNotDirectory(inputPath, useColor));

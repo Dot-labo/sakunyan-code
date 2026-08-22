@@ -42,6 +42,7 @@ sakunyan は独自のコーディングエージェントを一から作るも�
 
 ## 対応環境
 
+- Node.js 22.19.0 以上
 - macOS
 - Windows
   - Git Bash を前提とする
