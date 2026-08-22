@@ -7,11 +7,11 @@ README の設計方針に基づく実装順序。先の機能のための過剰�
 - [x] pi の対象バージョンを `@earendil-works/pi-coding-agent@0.84.2` に決める
 - [x] pi の npm パッケージを依存関係として組み込めることを確認する
 - [x] macOS で pi を起動する
-- [ ] Windows + Git Bash で pi を起動する（Windows 環境を用意できるまで保留）
+- [x] Windows + Git Bash で pi を起動する
 - [ ] OpenRouter の指定モデルに接続する（API キーと採用モデルが未決定）
 - [ ] 日本語入力・表示を確認する
 - [x] pi の拡張機能から system prompt、status、widget を変更できることを確認する
-- [ ] pi の標準ツールを sakunyan の起動経路から利用できることを確認する（ランチャー起動まで確認済み、ツール実行は未確認）
+- [x] pi の標準ツールを sakunyan の起動経路から利用できることを確認する
 
 完了条件：macOS と Windows の両方で、固定した pi が実モデルと会話できる。
 
@@ -27,7 +27,13 @@ README の設計方針に基づく実装順序。先の機能のための過剰�
 - 拡張 API に `ctx.ui.setStatus()`、`ctx.ui.setWidget()`、`ctx.ui.setWorkingMessage()` があり、予定している状態表示と常設表示を実装できる。
 - 標準ツールは `read`、`bash`、`edit`、`write`。CLI/SDK の双方から利用でき、対象フォルダは pi プロセスの `cwd` で指定できる。
 - 拡張、テーマ、system prompt は CLI 引数で明示的に読み込めるため、pi 本体をフォークせず sakunyan のランチャーから固定構成を渡す方針で問題ない。
-- 日本語の実入力・応答表示は実モデル接続と同時に確認する。Windows 検証は今回の対象外。
+- 日本語の実入力・応答表示は実モデル接続と同時に確認する。
+
+### 検証結果（2026-08-22、Windows）
+
+- Windows + Git Bash で `sakunyan .` から固定版 pi 0.84.2 が起動することを確認した。
+- Node.js 22.14.0 では pi の依存ライブラリが必要とする Zstandard API がなく起動後に例外となった。sakunyan に起動前のバージョン検査を追加し、Node.js 22.19.0 以上への更新後に正常起動を確認した。
+- sakunyan は pi の標準起動経路を利用しており、標準ツール `read`、`bash`、`edit`、`write` をそのまま利用できる。
 
 参考資料：
 
