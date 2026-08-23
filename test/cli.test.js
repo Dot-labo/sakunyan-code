@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 import { dirname } from "node:path";
+import { educationalSystemPrompt } from "../dist/educational-prompt.js";
 import { sakunyanExtension } from "../dist/extension.js";
 import { messages } from "../dist/messages.js";
 import { supportsNodeVersion } from "../dist/node-version.js";
@@ -13,6 +14,8 @@ test("対象フォルダを必須にする", () => {
   assert.equal(supportsNodeVersion("22.19.0"), true);
   assert.equal(supportsNodeVersion("24.0.0"), true);
   assert.match(messages.unsupportedNodeVersion("22.14.0", "22.19.0"), /node --version/);
+  assert.match(educationalSystemPrompt, /子どもにも理解できる言葉/);
+  assert.match(educationalSystemPrompt, /Gitのコミット・プッシュ/);
 
   const missing = run();
   assert.equal(missing.status, 1);
