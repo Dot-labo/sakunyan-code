@@ -33,7 +33,19 @@ npm --version
 
 ### 2. sakunyanを取得して準備
 
-ターミナル（WindowsはGit Bash）で実行します。
+公開後は、ターミナル（WindowsはPowerShellまたはGit Bash）で次を実行します。
+
+```sh
+npm install -g @dotlabo/sakunyan-code@latest
+```
+
+インストールせずに一度だけ実行する場合は、次の方法も使えます。
+
+```sh
+npx @dotlabo/sakunyan-code@latest .
+```
+
+開発版をソースから使う場合は、リポジトリを取得してから次を実行します。
 
 ```sh
 git clone https://github.com/dot-labo/sakunyan-code.git
@@ -66,16 +78,20 @@ sakunyan /c/Users/名前/projects/my-project
 
 ### 4. APIキーを設定
 
-sakunyan画面で次を入力します。
+初回起動時に、sakunyanがOpenRouterの固定モデルへ接続できない場合、APIキーの入力画面が表示されます。
+
+- 先生から受け取ったOpenRouter APIキーを入力する
+- Enterで確定する
+- Escで終了する
+- 接続に失敗した場合は、キーを確認して再入力する
+
+接続に成功すると、APIキーはpi標準の認証ファイルへ保存され、次回から再入力せずに使えます。APIキーはログやエラーメッセージには表示されません。
+
+使用するプロバイダとモデルは sakunyan 側で固定されています。
 
 ```text
-/login openrouter
-```
-
-「APIキーを使う」を選び、先生から受け取ったキーを入力します。設定後、次でモデルを選びます。
-
-```text
-/model
+プロバイダ: openrouter
+モデル: deepseek/deepseek-v4-flash
 ```
 
 APIキーは他の人に見せたり、GitHubへ公開したりしないでください。
@@ -83,7 +99,7 @@ APIキーは他の人に見せたり、GitHubへ公開したりしないでく�
 ## 起動後の表示
 
 ```text
-sakunyan code (v0.1.2)へようこそ！
+sakunyan code (v0.1.3)へようこそ！
 作業フォルダ：現在のフォルダ
 🐱 質問を入力してね（Ctrl+Cを2回で終了）
 ```
@@ -94,7 +110,7 @@ sakunyan code (v0.1.2)へようこそ！
 
 ### `sakunyan: command not found` と表示される
 
-`npm link` を実行したあと、ターミナルを開き直してください。
+`npm install -g @dotlabo/sakunyan-code@latest` を実行したあと、ターミナルを開き直してください。改善しない場合は、npmのグローバル実行ファイルのパスがPATHに含まれているか確認してください。
 
 ### フォルダが見つからない
 
@@ -106,7 +122,7 @@ sakunyan .
 
 ### モデルが使えない
 
-sakunyan画面で `/login openrouter` を実行し、APIキーを設定してください。
+起動時の案内に従って、先生から受け取ったOpenRouter APIキーを入力してください。キーが無効な場合は再入力できます。
 
 ### Node.jsのバージョンが古い
 
