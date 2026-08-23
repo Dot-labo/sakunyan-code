@@ -6,6 +6,7 @@ import { dirname, resolve } from "node:path";
 import { educationalSystemPrompt } from "./educational-prompt.js";
 import { sakunyanExtension } from "./extension.js";
 import { messages } from "./messages.js";
+import { MODEL_ARGS } from "./model-config.js";
 import { MIN_NODE_VERSION, supportsNodeVersion } from "./node-version.js";
 
 process.env.PI_CODING_AGENT = "true";
@@ -59,6 +60,7 @@ async function run(): Promise<void> {
         "--no-skills",
         "--no-prompt-templates",
         ...args,
+        ...MODEL_ARGS,
         "--tools",
         "read,grep,find,ls,bash",
         "--append-system-prompt",

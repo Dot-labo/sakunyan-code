@@ -15,6 +15,17 @@ export const messages = {
     checkingFiles: "ファイルを確認中…",
     runningCommand: "コマンドを実行中…",
   },
+  setup: {
+    checking: "接続を確認中",
+    checkingOk: "接続確認OK",
+    checkingNg: "接続確認NG",
+    requestKey: "先生から受け取ったOpenRouter APIキーを入力してね。",
+    inputPrompt: "🔑 ここにAPIキーを入力 👉",
+    inputHint: "✅ Enterで確定　🚪 Escで終了",
+    retrying: "APIキーで接続を再確認中",
+    invalidKey: "APIキーで接続できなかったみたい。キーを確認して、もう一度入力してね。",
+    cancelled: "APIキーの設定をキャンセルしました。",
+  },
   unsupportedNodeVersion: (current: string, required: string, color = false) => `${paint("1;31", "❌ Node.jsのバージョンが古いため、sakunyanを起動できません。", color)}
 
 現在のバージョン： ${paint("33", `v${current}`, color)}
