@@ -19,7 +19,7 @@ test("対象フォルダを必須にする", () => {
 
   const missing = run();
   assert.equal(missing.status, 1);
-  assert.match(missing.stderr, /sakunyan code \(v0\.1\.0\)へようこそ/);
+  assert.match(missing.stderr, /sakunyan code \(v0\.1\.2\)へようこそ/);
   assert.match(missing.stderr, new RegExp(process.cwd().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.match(missing.stderr, /sakunyan \./);
   assert.match(missing.stderr, /cd \.\./);
@@ -69,6 +69,6 @@ test("対象フォルダを必須にする", () => {
   assert.match(header.join("\n"), /sakunyan code/);
   assert.match(header.join("\n"), /____/);
   assert.match(header.join("\n"), /\/project/);
-  assert.match(header.join("\n"), /sakunyan code \(v0\.1\.0\)へようこそ/);
+  assert.match(header.join("\n"), /sakunyan code \(v0\.1\.2\)へようこそ/);
   assert.match(status, /質問を入力してね（Ctrl\+Cを2回で終了）/);
 });
