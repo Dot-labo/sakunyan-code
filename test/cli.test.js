@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 import { dirname } from "node:path";
+import { sakunyanExtension } from "../dist/extension.js";
 import { messages } from "../dist/messages.js";
 import { supportsNodeVersion } from "../dist/node-version.js";
 
@@ -15,7 +16,7 @@ test("対象フォルダを必須にする", () => {
 
   const missing = run();
   assert.equal(missing.status, 1);
-  assert.match(missing.stderr, /🐱 sakunyan code へようこそ/);
+  assert.match(missing.stderr, /sakunyan code \(v0\.1\.0\)へようこそ/);
   assert.match(missing.stderr, new RegExp(process.cwd().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.match(missing.stderr, /sakunyan \./);
   assert.match(missing.stderr, /cd \.\./);
@@ -44,4 +45,27 @@ test("対象フォルダを必須にする", () => {
 
   assert.match(messages.targetRequired("/project", true), /\x1b\[/);
   assert.doesNotMatch(messages.targetRequired("/project"), /\x1b\[/);
+
+  const handlers = new Map();
+  sakunyanExtension({ on: (event, handler) => handlers.set(event, handler) });
+  assert.deepEqual([...handlers.keys()], ["session_start", "turn_start", "tool_call", "tool_result", "turn_end"]);
+
+  let header;
+  let status;
+  const theme = { fg: (_color, text) => text, bold: (text) => text };
+  handlers.get("session_start")({}, {
+    mode: "tui",
+    cwd: "/project",
+    ui: {
+      theme,
+      setHeader: (factory) => (header = factory({}, theme).render()),
+      setStatus: (_key, text) => (status = text),
+      setWorkingMessage() {},
+    },
+  });
+  assert.match(header.join("\n"), /sakunyan code/);
+  assert.match(header.join("\n"), /____/);
+  assert.match(header.join("\n"), /\/project/);
+  assert.match(header.join("\n"), /sakunyan code \(v0\.1\.0\)へようこそ/);
+  assert.match(status, /質問を入力してね（Ctrl\+Cを2回で終了）/);
 });

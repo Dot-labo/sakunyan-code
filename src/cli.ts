@@ -3,6 +3,7 @@
 import { statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
+import { sakunyanExtension } from "./extension.js";
 import { messages } from "./messages.js";
 import { MIN_NODE_VERSION, supportsNodeVersion } from "./node-version.js";
 
@@ -51,7 +52,9 @@ async function run(): Promise<void> {
   if (isDirectory) {
     process.chdir(targetPath);
     const { main } = await import("@earendil-works/pi-coding-agent");
-    await main(args);
+    await main(["--no-extensions", "--no-skills", "--no-prompt-templates", ...args], {
+      extensionFactories: [{ name: "sakunyan", factory: sakunyanExtension, hidden: true }],
+    });
   } else if (process.exitCode === undefined) {
     process.stderr.write(messages.targetNotDirectory(inputPath, useColor));
     process.exitCode = 1;

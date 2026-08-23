@@ -1,7 +1,20 @@
+import { SAKUNYAN_LOGO, SAKUNYAN_VERSION } from "./version.js";
+
 const paint = (code: string, text: string, color: boolean) =>
   color ? `\x1b[${code}m${text}\x1b[0m` : text;
 
 export const messages = {
+  ui: {
+    logo: SAKUNYAN_LOGO,
+    header: `sakunyan code (v${SAKUNYAN_VERSION})へようこそ！`,
+    workingDirectory: "作業フォルダ：",
+    idleIcon: "🐱",
+    workingIcon: "🐈",
+    waiting: "質問を入力してね（Ctrl+Cを2回で終了）",
+    thinking: "考え中…",
+    checkingFiles: "ファイルを確認中…",
+    runningCommand: "コマンドを実行中…",
+  },
   unsupportedNodeVersion: (current: string, required: string, color = false) => `${paint("1;31", "❌ Node.jsのバージョンが古いため、sakunyanを起動できません。", color)}
 
 現在のバージョン： ${paint("33", `v${current}`, color)}
@@ -13,7 +26,7 @@ Node.jsを更新してから、もう一度実行してください：
 更新できたか確認するコマンド：
   ${paint("33", "node --version", color)}
 `,
-  targetRequired: (currentDirectory: string, color = false) => `${paint("1;32", "🐱 sakunyan code へようこそ！", color)}
+  targetRequired: (currentDirectory: string, color = false) => `${paint("1;32", messages.ui.header, color)}
 
 ${paint("36", "今いるフォルダはここだよ：", color)}
   ${paint("1;34", `📁 ${currentDirectory}`, color)}

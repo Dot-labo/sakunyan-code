@@ -18,10 +18,12 @@
     "node": ">=22.19.0"
   },
   "devDependencies": {
+    "@types/figlet": "^1.7.0",
     "@types/node": "^22.0.0",
     "typescript": "^5.7.0"
   },
   "dependencies": {
-    "@earendil-works/pi-coding-agent": "0.84.2"
+    "@earendil-works/pi-coding-agent": "0.84.2",
+    "figlet": "^1.11.4"
   }
 }
