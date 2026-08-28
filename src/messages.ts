@@ -15,6 +15,13 @@ export const messages = {
     checkingFiles: "ファイルを確認中…",
     runningCommand: "コマンドを実行中…",
   },
+  footer: {
+    expiryIcon: "🔑",
+    expiryNone: "期限なし",
+    loading: "取得中…",
+    unavailable: "取得できません",
+    unlimited: "上限なし",
+  },
   setup: {
     checking: "接続を確認中",
     checkingOk: "接続確認OK",

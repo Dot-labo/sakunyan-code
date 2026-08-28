@@ -23,7 +23,7 @@ test("対象フォルダを必須にする", async () => {
 
   const missing = run();
   assert.equal(missing.status, 1);
-  assert.match(missing.stderr, /sakunyan code \(v0\.1\.4\)へようこそ/);
+  assert.match(missing.stderr, /sakunyan code \(v0\.1\.5\)へようこそ/);
   assert.match(missing.stderr, new RegExp(process.cwd().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.match(missing.stderr, /sakunyan \./);
   assert.match(missing.stderr, /cd \.\./);
@@ -68,10 +68,14 @@ test("対象フォルダを必須にする", async () => {
     modelRegistry: {
       find: () => ({}),
       complete: async () => ({ stopReason: "stop" }),
+      getApiKeyForProvider: async () => undefined,
     },
     ui: {
       theme,
       setHeader: (factory) => (header = factory({}, theme).render()),
+      setFooter: (factory) => factory({ requestRender() {} }, theme, {
+        getExtensionStatuses: () => new Map(),
+      }),
       setStatus: (_key, text) => (status = text),
       setWidget() {},
       setWorkingMessage() {},
@@ -80,7 +84,7 @@ test("対象フォルダを必須にする", async () => {
   assert.match(header.join("\n"), /sakunyan code/);
   assert.match(header.join("\n"), /____/);
   assert.match(header.join("\n"), /\/project/);
-  assert.match(header.join("\n"), /sakunyan code \(v0\.1\.4\)へようこそ/);
+  assert.match(header.join("\n"), /sakunyan code \(v0\.1\.5\)へようこそ/);
   assert.match(status, /質問を入力してね（Ctrl\+Cを2回で終了）/);
 });
 
@@ -106,6 +110,7 @@ test("APIキー入力後に接続確認を再試行し、入力値を表示す�
       find: () => ({}),
       registerProvider: (_provider, config) => assert.equal(config.apiKey, "teacher-secret"),
       refresh: async () => ({ errors: new Map() }),
+      getApiKeyForProvider: async () => undefined,
       complete: async () => {
         attempts += 1;
         if (attempts === 1) throw new Error("missing key");
@@ -115,6 +120,9 @@ test("APIキー入力後に接続確認を再試行し、入力値を表示す�
     ui: {
       theme,
       setHeader() {},
+      setFooter: (factory) => factory({ requestRender() {} }, theme, {
+        getExtensionStatuses: () => new Map(),
+      }),
       setStatus: (_key, text) => statuses.push(text),
       setWidget: (_key, lines) => widgets.push(...lines),
       setWorkingMessage() {},
