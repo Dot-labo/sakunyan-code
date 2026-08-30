@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import "./agent-dir.js";
 import { statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
