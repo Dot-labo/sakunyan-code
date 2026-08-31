@@ -53,7 +53,7 @@ function requestApiKey(ctx: ExtensionContext): Promise<string | undefined> {
 
     return {
       render: (width: number) => [
-        truncateToWidth(theme.fg("text", messages.setup.requestKey), width, ""),
+        ...messages.setup.keySources.map((line) => truncateToWidth(theme.fg("text", line), width, "")),
         truncateToWidth(theme.fg("dim", messages.setup.inputHint), width, ""),
         truncateToWidth(theme.fg("accent", `${messages.setup.inputPrompt} ${value}`), width, ""),
       ],
@@ -99,7 +99,7 @@ async function setupModel(ctx: ExtensionContext): Promise<boolean> {
     return true;
   }
 
-  showSetupMessage(ctx, messages.setup.checkingNg, "error");
+  showSetupMessage(ctx, `${messages.setup.checkingNg}　${messages.setup.requestKey}`, "error");
   ctx.ui.setWorkingMessage(messages.setup.requestKey);
 
   while (true) {
@@ -125,7 +125,7 @@ async function setupModel(ctx: ExtensionContext): Promise<boolean> {
       showSetupMessage(ctx, messages.setup.checkingOk, "success");
       return true;
     }
-    showSetupMessage(ctx, messages.setup.checkingNg, "error");
+    showSetupMessage(ctx, `${messages.setup.checkingNg}　${messages.setup.requestKey}`, "error");
     ctx.ui.setWorkingMessage(messages.setup.invalidKey);
     ctx.ui.notify(messages.setup.invalidKey, "warning");
   }

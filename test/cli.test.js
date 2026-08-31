@@ -23,7 +23,7 @@ test("対象フォルダを必須にする", async () => {
 
   const missing = run();
   assert.equal(missing.status, 1);
-  assert.match(missing.stderr, /sakunyan code \(v0\.1\.6\)へようこそ/);
+  assert.match(missing.stderr, /sakunyan code \(v0\.1\.7\)へようこそ/);
   assert.match(missing.stderr, new RegExp(process.cwd().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.match(missing.stderr, /sakunyan \./);
   assert.match(missing.stderr, /cd \.\./);
@@ -84,7 +84,7 @@ test("対象フォルダを必須にする", async () => {
   assert.match(header.join("\n"), /sakunyan code/);
   assert.match(header.join("\n"), /____/);
   assert.match(header.join("\n"), /\/project/);
-  assert.match(header.join("\n"), /sakunyan code \(v0\.1\.6\)へようこそ/);
+  assert.match(header.join("\n"), /sakunyan code \(v0\.1\.7\)へようこそ/);
   assert.match(status, /質問を入力してね（Ctrl\+Cを2回で終了）/);
 });
 
@@ -129,7 +129,13 @@ test("APIキー入力後に接続確認を再試行し、入力値を表示す�
       notify() {},
       custom: async (factory) => {
         component = factory({}, theme, {}, (value) => value);
-        assert.doesNotMatch(component.render(80).join("\n"), /teacher-secret/);
+        const instructions = component.render(80).join("\n");
+        assert.match(instructions, /APIキーの取得方法/);
+        assert.match(instructions, /https:\/\/portal\.dot-labo\.jp\/home\/openrouter-key/);
+        assert.match(instructions, /https:\/\/openrouter\.ai\/settings\/keys/);
+        assert.match(instructions, /自分専用のOpenRouterアカウントが必要です/);
+        assert.match(instructions, /先生からAPIキーを受け取る/);
+        assert.doesNotMatch(instructions, /\n\n|teacher-secret/);
         component.handleInput("teacher-secret");
         assert.match(component.render(80).join("\n"), /teacher-secret/);
         component.handleInput("\n");
@@ -144,7 +150,7 @@ test("APIキー入力後に接続確認を再試行し、入力値を表示す�
   await handlers.get("session_start")({}, context);
   assert.equal(attempts, 2);
   assert.ok(widgets.some((status) => status.includes("接続を確認中")));
-  assert.ok(widgets.some((status) => status.includes("接続確認NG")));
+  assert.ok(widgets.some((status) => status.includes("接続確認NG　OpenRouter APIキーが必要です。")));
   assert.ok(widgets.some((status) => status.includes("接続確認OK")));
   } finally {
     if (previousAgentDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;
