@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { test } from "node:test";
 import { dirname, join } from "node:path";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { educationalSystemPrompt } from "../dist/educational-prompt.js";
 import { sakunyanExtension, saveApiKey } from "../dist/extension.js";
 import { messages } from "../dist/messages.js";
@@ -153,7 +153,7 @@ test("APIキー入力後に接続確認を再試行し、入力値を表示す�
   }
 });
 
-test("APIキーをpi標準の認証ファイルへ保存する", () => {
+test("APIキーをsakunyan専用の認証ファイルへ保存する", () => {
   const directory = mkdtempSync(join(tmpdir(), "sakunyan-auth-"));
   const authPath = join(directory, "auth.json");
   try {
@@ -164,5 +164,26 @@ test("APIキーをpi標準の認証ファイルへ保存する", () => {
     assert.equal(statSync(authPath).mode & 0o777, 0o600);
   } finally {
     rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("sakunyanの保存先はpi標準のディレクトリから分離される", async () => {
+  const expected = join(homedir(), ".sakunyan");
+  const { SAKUNYAN_AGENT_DIR } = await import("../dist/agent-dir.js");
+  assert.equal(SAKUNYAN_AGENT_DIR, expected);
+
+  const { getAgentDir } = await import("@earendil-works/pi-coding-agent");
+  assert.equal(getAgentDir(), expected);
+
+  const isolatedHome = mkdtempSync(join(tmpdir(), "sakunyan-home-"));
+  try {
+    const result = spawnSync(process.execPath, ["dist/cli.js", ".", "--version"], {
+      encoding: "utf8",
+      env: { ...process.env, HOME: isolatedHome, USERPROFILE: isolatedHome },
+    });
+    assert.equal(result.status, 0);
+    assert.equal(existsSync(join(isolatedHome, ".pi")), false);
+  } finally {
+    rmSync(isolatedHome, { recursive: true, force: true });
   }
 });
