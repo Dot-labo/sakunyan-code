@@ -4,6 +4,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSy
 import { dirname, join } from "node:path";
 import { messages } from "./messages.js";
 import { MODEL_ID, MODEL_PROVIDER } from "./model-config.js";
+import { getDefaultMode, SAKUNYAN_MODES, type SakunyanMode } from "./modes.js";
 import {
   fetchKeyStatus,
   KEY_STATUS_BAR_WIDTH,
@@ -68,6 +69,48 @@ function requestApiKey(ctx: ExtensionContext): Promise<string | undefined> {
           value += data.slice(6, -6);
         } else if (![...data].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)) {
           value += data;
+        }
+      },
+      invalidate() {},
+    };
+  });
+}
+
+function selectMode(
+  ctx: ExtensionContext,
+  currentModeId: string,
+): Promise<SakunyanMode | undefined> {
+  return ctx.ui.custom((tui, theme, _keybindings, done) => {
+    let selectedIndex = Math.max(0, SAKUNYAN_MODES.findIndex(({ id }) => id === currentModeId));
+
+    return {
+      render: (width: number) => {
+        const selectedMode = SAKUNYAN_MODES[selectedIndex] ?? getDefaultMode();
+        return [
+          theme.fg("accent", theme.bold(messages.ui.modeTitle)),
+          "",
+          ...SAKUNYAN_MODES.map((mode, index) => theme.fg(
+            index === selectedIndex ? "accent" : "text",
+            `${index === selectedIndex ? "→" : " "} ${mode.name}`,
+          )),
+          "",
+          theme.fg("text", `${messages.ui.modeDescription}：${selectedMode.description}`),
+          theme.fg("warning", `${messages.ui.modeNotice}：${selectedMode.notice}`),
+          "",
+          theme.fg("dim", messages.ui.modeInputHint),
+        ].map((line) => truncateToWidth(line, width, ""));
+      },
+      handleInput(data: string) {
+        if (matchesKey(data, "up")) {
+          selectedIndex = (selectedIndex - 1 + SAKUNYAN_MODES.length) % SAKUNYAN_MODES.length;
+          tui.requestRender();
+        } else if (matchesKey(data, "down")) {
+          selectedIndex = (selectedIndex + 1) % SAKUNYAN_MODES.length;
+          tui.requestRender();
+        } else if (matchesKey(data, "enter")) {
+          done(SAKUNYAN_MODES[selectedIndex] ?? getDefaultMode());
+        } else if (matchesKey(data, "escape") || matchesKey(data, "ctrl+c")) {
+          done(undefined);
         }
       },
       invalidate() {},
@@ -235,8 +278,51 @@ function installKeyStatusDisplay(ctx: ExtensionContext): () => void {
 }
 
 export function sakunyanExtension(pi: ExtensionAPI): void {
+  let currentMode = getDefaultMode();
+  let activity: {
+    color: "accent" | "success";
+    icon: string;
+    text: string;
+  } = { color: "success", icon: messages.ui.idleIcon, text: messages.ui.waiting };
+
+  const renderStatus = (ctx: ExtensionContext) => {
+    ctx.ui.setStatus(
+      "sakunyan",
+      ctx.ui.theme.fg(activity.color, `${activity.icon} ${activity.text} ｜ ${currentMode.name}`),
+    );
+  };
+
+  const showStatus = (
+    ctx: ExtensionContext,
+    color: "accent" | "success",
+    icon: string,
+    text: string,
+  ) => {
+    activity = { color, icon, text };
+    renderStatus(ctx);
+  };
+
+  pi.registerCommand("mode", {
+    description: "応答モードを切り替える",
+    handler: async (_args, ctx) => {
+      if (ctx.mode !== "tui") return;
+      const selectedMode = await selectMode(ctx, currentMode.id);
+      if (!selectedMode) return;
+      currentMode = selectedMode;
+      renderStatus(ctx);
+      ctx.ui.notify(messages.ui.modeChanged(currentMode.name), "info");
+    },
+  });
+
+  pi.on("before_agent_start", (event) => ({
+    systemPrompt: `${event.systemPrompt}\n\n${currentMode.prompt}`,
+  }));
+
   pi.on("session_start", async (_event, ctx) => {
     if (ctx.mode !== "tui") return;
+
+    currentMode = getDefaultMode();
+    activity = { color: "success", icon: messages.ui.idleIcon, text: messages.ui.waiting };
 
     ctx.ui.setHeader((_tui, theme) => ({
       render: () => [
@@ -249,34 +335,34 @@ export function sakunyanExtension(pi: ExtensionAPI): void {
     }));
     if (await setupModel(ctx)) {
       keyStatusRefreshers.set(ctx, installKeyStatusDisplay(ctx));
-      ctx.ui.setStatus("sakunyan", ctx.ui.theme.fg("success", `${messages.ui.idleIcon} ${messages.ui.waiting}`));
+      renderStatus(ctx);
       ctx.ui.setWorkingMessage(messages.ui.thinking);
     }
   });
 
   pi.on("turn_start", (_event, ctx) => {
     if (ctx.mode !== "tui") return;
-    ctx.ui.setStatus("sakunyan", ctx.ui.theme.fg("accent", `${messages.ui.workingIcon} ${messages.ui.thinking}`));
+    showStatus(ctx, "accent", messages.ui.workingIcon, messages.ui.thinking);
     ctx.ui.setWorkingMessage(messages.ui.thinking);
   });
 
   pi.on("tool_call", (event, ctx) => {
     if (ctx.mode !== "tui") return;
     const status = event.toolName === "bash" ? messages.ui.runningCommand : messages.ui.checkingFiles;
-    ctx.ui.setStatus("sakunyan", ctx.ui.theme.fg("accent", `${messages.ui.workingIcon} ${status}`));
+    showStatus(ctx, "accent", messages.ui.workingIcon, status);
     ctx.ui.setWorkingMessage(status);
   });
 
   pi.on("tool_result", (_event, ctx) => {
     if (ctx.mode !== "tui") return;
-    ctx.ui.setStatus("sakunyan", ctx.ui.theme.fg("accent", `${messages.ui.workingIcon} ${messages.ui.thinking}`));
+    showStatus(ctx, "accent", messages.ui.workingIcon, messages.ui.thinking);
     ctx.ui.setWorkingMessage(messages.ui.thinking);
   });
 
   pi.on("turn_end", (_event, ctx) => {
     if (ctx.mode !== "tui") return;
     keyStatusRefreshers.get(ctx)?.();
-    ctx.ui.setStatus("sakunyan", ctx.ui.theme.fg("success", `${messages.ui.idleIcon} ${messages.ui.waiting}`));
+    showStatus(ctx, "success", messages.ui.idleIcon, messages.ui.waiting);
     ctx.ui.setWorkingMessage(messages.ui.thinking);
   });
 }

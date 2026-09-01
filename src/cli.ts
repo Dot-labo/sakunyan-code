@@ -4,7 +4,6 @@ import "./agent-dir.js";
 import { statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
-import { educationalSystemPrompt } from "./educational-prompt.js";
 import { sakunyanExtension } from "./extension.js";
 import { messages } from "./messages.js";
 import { MODEL_ARGS } from "./model-config.js";
@@ -64,8 +63,6 @@ async function run(): Promise<void> {
         ...MODEL_ARGS,
         "--tools",
         "read,grep,find,ls,bash",
-        "--append-system-prompt",
-        educationalSystemPrompt,
       ],
       {
         extensionFactories: [{ name: "sakunyan", factory: sakunyanExtension, hidden: true }],

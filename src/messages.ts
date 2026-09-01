@@ -14,6 +14,11 @@ export const messages = {
     thinking: "考え中…",
     checkingFiles: "ファイルを確認中…",
     runningCommand: "コマンドを実行中…",
+    modeTitle: "応答モードを選んでね",
+    modeDescription: "説明",
+    modeNotice: "注意",
+    modeInputHint: "↑↓ 選択　Enterで決定　Escでキャンセル",
+    modeChanged: (name: string) => `応答モードを「${name}」に変更しました。`,
   },
   footer: {
     expiryIcon: "🔑",
