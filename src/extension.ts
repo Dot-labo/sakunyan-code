@@ -4,6 +4,8 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSy
 import { dirname, join } from "node:path";
 import { messages } from "./messages.js";
 import { MODEL_ID, MODEL_PROVIDER } from "./model-config.js";
+import { fetchLatestSakunyanVersion, isUpdateAvailable } from "./update-check.js";
+import { SAKUNYAN_VERSION } from "./version.js";
 import {
   fetchKeyStatus,
   KEY_STATUS_BAR_WIDTH,
@@ -234,6 +236,18 @@ function installKeyStatusDisplay(ctx: ExtensionContext): () => void {
   return () => void refresh();
 }
 
+async function showUpdateNotice(ctx: ExtensionContext): Promise<void> {
+  try {
+    const latestVersion = await fetchLatestSakunyanVersion();
+    if (!latestVersion || !isUpdateAvailable(latestVersion, SAKUNYAN_VERSION)) return;
+    ctx.ui.setWidget("sakunyan-update", messages.update.available(SAKUNYAN_VERSION, latestVersion), {
+      placement: "aboveEditor",
+    });
+  } catch {
+    return;
+  }
+}
+
 export function sakunyanExtension(pi: ExtensionAPI): void {
   pi.on("session_start", async (_event, ctx) => {
     if (ctx.mode !== "tui") return;
@@ -251,6 +265,7 @@ export function sakunyanExtension(pi: ExtensionAPI): void {
       keyStatusRefreshers.set(ctx, installKeyStatusDisplay(ctx));
       ctx.ui.setStatus("sakunyan", ctx.ui.theme.fg("success", `${messages.ui.idleIcon} ${messages.ui.waiting}`));
       ctx.ui.setWorkingMessage(messages.ui.thinking);
+      void showUpdateNotice(ctx);
     }
   });
 
