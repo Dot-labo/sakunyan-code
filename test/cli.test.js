@@ -220,10 +220,10 @@ test("sakunyan-codeの更新案内は新しいバージョンがあるときだ�
   assert.equal(isUpdateAvailable("latest", "0.1.7"), false);
   assert.equal(isUpdateAvailable("0.2.0", "unknown"), false);
 
-  const notice = messages.update.available("0.1.7", "0.2.0").join("\n");
-  assert.match(notice, /0\.1\.7/);
-  assert.match(notice, /0\.2\.0/);
-  assert.match(notice, /npm install -g @dotlabo\/sakunyan-code@latest/);
+  assert.equal(messages.update.title, "アップデートがあります");
+  assert.match(messages.update.versionLine("0.1.7", "0.2.0"), /0\.1\.7/);
+  assert.match(messages.update.versionLine("0.1.7", "0.2.0"), /0\.2\.0/);
+  assert.equal(messages.update.command, "npm install -g @dotlabo/sakunyan-code@latest");
 });
 
 test("npmのバージョン取得に失敗した場合はundefinedを返す", async () => {
@@ -277,8 +277,15 @@ test("更新確認はバックグラウンドで行い、新しいバージョ�
     globalThis.fetch = async () => ({ ok: true, json: async () => ({ version: "99.0.0" }) });
     await handlers.get("session_start")({}, makeContext());
     await settle();
-    assert.match(widgets.get("sakunyan-update")?.join("\n") ?? "", /99\.0\.0/);
-    assert.match(widgets.get("sakunyan-update")?.join("\n") ?? "", /npm install -g @dotlabo\/sakunyan-code@latest/);
+    const widgetFactory = widgets.get("sakunyan-update");
+    assert.equal(typeof widgetFactory, "function");
+    const notice = widgetFactory({}, theme).render(80).join("\n");
+    assert.match(notice, /─{10,}/);
+    assert.match(notice, /アップデートがあります/);
+    assert.match(notice, /99\.0\.0/);
+    assert.match(notice, /npm install -g @dotlabo\/sakunyan-code@latest/);
+    assert.equal(notice.split("\n").at(0), "");
+    assert.equal(notice.split("\n").at(-1), "");
 
     widgets.clear();
     globalThis.fetch = async () => ({ ok: true, json: async () => ({ version: "0.1.7" }) });

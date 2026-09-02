@@ -41,11 +41,11 @@ export const messages = {
     cancelled: "APIキーの設定をキャンセルしました。",
   },
   update: {
-    available: (current: string, latest: string): string[] => [
-      `🐈 新しいバージョンがあるよ：v${current} → v${latest}`,
-      "終了してから、ターミナルで次のコマンドを実行してね：",
-      "  npm install -g @dotlabo/sakunyan-code@latest",
-    ],
+    title: "アップデートがあります",
+    versionLine: (current: string, latest: string): string =>
+      `新しいバージョン v${latest} があります。（現在: v${current}）`,
+    instruction: "終了してから、ターミナルで次のコマンドを実行してね：",
+    command: "npm install -g @dotlabo/sakunyan-code@latest",
   },
   unsupportedNodeVersion: (current: string, required: string, color = false) => `${paint("1;31", "❌ Node.jsのバージョンが古いため、sakunyanを起動できません。", color)}
 
