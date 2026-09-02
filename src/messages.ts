@@ -41,9 +41,9 @@ export const messages = {
     cancelled: "APIキーの設定をキャンセルしました。",
   },
   update: {
-    title: "アップデートがあります",
+    title: "新しいバージョンがあるよ！",
     versionLine: (current: string, latest: string): string =>
-      `新しいバージョン v${latest} があります。（現在: v${current}）`,
+      `🐈 今のバージョン v${current} → 新しいバージョン v${latest}`,
     instruction: "終了してから、ターミナルで次のコマンドを実行してね：",
     command: "npm install -g @dotlabo/sakunyan-code@latest",
   },
