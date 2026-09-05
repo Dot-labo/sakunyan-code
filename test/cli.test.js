@@ -9,6 +9,12 @@ import { sakunyanExtension, saveApiKey } from "../dist/extension.js";
 import { messages } from "../dist/messages.js";
 import { MODEL_ARGS, MODEL_ID, MODEL_PROVIDER, MODEL_REFERENCE } from "../dist/model-config.js";
 import { supportsNodeVersion } from "../dist/node-version.js";
+import { fetchLatestSakunyanVersion, isUpdateAvailable } from "../dist/update-check.js";
+import { SAKUNYAN_VERSION } from "../dist/version.js";
+
+const welcomePattern = new RegExp(
+  `sakunyan code \\(v${SAKUNYAN_VERSION.replace(/\./g, "\\.")}\\)へようこそ`,
+);
 
 const run = (...args) => spawnSync(process.execPath, ["dist/cli.js", ...args], { encoding: "utf8" });
 
@@ -23,7 +29,7 @@ test("対象フォルダを必須にする", async () => {
 
   const missing = run();
   assert.equal(missing.status, 1);
-  assert.match(missing.stderr, /sakunyan code \(v0\.1\.7\)へようこそ/);
+  assert.match(missing.stderr, welcomePattern);
   assert.match(missing.stderr, new RegExp(process.cwd().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.match(missing.stderr, /sakunyan \./);
   assert.match(missing.stderr, /cd \.\./);
@@ -60,6 +66,10 @@ test("対象フォルダを必須にする", async () => {
   let header;
   let status;
   const theme = { fg: (_color, text) => text, bold: (text) => text };
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    throw new Error("offline");
+  };
   await handlers.get("session_start")({}, {
     mode: "tui",
     hasUI: true,
@@ -84,14 +94,19 @@ test("対象フォルダを必須にする", async () => {
   assert.match(header.join("\n"), /sakunyan code/);
   assert.match(header.join("\n"), /____/);
   assert.match(header.join("\n"), /\/project/);
-  assert.match(header.join("\n"), /sakunyan code \(v0\.1\.7\)へようこそ/);
+  assert.match(header.join("\n"), welcomePattern);
   assert.match(status, /質問を入力してね（Ctrl\+Cを2回で終了）/);
+  globalThis.fetch = previousFetch;
 });
 
 test("APIキー入力後に接続確認を再試行し、入力値を表示する", async () => {
   const authDirectory = mkdtempSync(join(tmpdir(), "sakunyan-flow-"));
   const previousAgentDirectory = process.env.PI_CODING_AGENT_DIR;
   process.env.PI_CODING_AGENT_DIR = authDirectory;
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    throw new Error("offline");
+  };
 
   try {
   const handlers = new Map();
@@ -155,6 +170,7 @@ test("APIキー入力後に接続確認を再試行し、入力値を表示す�
   } finally {
     if (previousAgentDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;
     else process.env.PI_CODING_AGENT_DIR = previousAgentDirectory;
+    globalThis.fetch = previousFetch;
     rmSync(authDirectory, { recursive: true, force: true });
   }
 });
@@ -191,5 +207,105 @@ test("sakunyanの保存先はpi標準のディレクトリから分離される"
     assert.equal(existsSync(join(isolatedHome, ".pi")), false);
   } finally {
     rmSync(isolatedHome, { recursive: true, force: true });
+  }
+});
+
+test("pi本体の更新確認は無効化される", async () => {
+  await import("../dist/agent-dir.js");
+  assert.equal(process.env.PI_SKIP_VERSION_CHECK, "1");
+});
+
+test("sakunyan-codeの更新案内は新しいバージョンがあるときだけ表示する", async () => {
+  assert.equal(isUpdateAvailable("0.2.0", "0.1.7"), true);
+  assert.equal(isUpdateAvailable("1.0.0", "0.1.7"), true);
+  assert.equal(isUpdateAvailable("0.2.10", "0.2.9"), true);
+  assert.equal(isUpdateAvailable("0.1.7", "0.1.7"), false);
+  assert.equal(isUpdateAvailable("0.1.6", "0.1.7"), false);
+  assert.equal(isUpdateAvailable("0.1.7-beta.1", "0.1.7"), false);
+  assert.equal(isUpdateAvailable("latest", "0.1.7"), false);
+  assert.equal(isUpdateAvailable("0.2.0", "unknown"), false);
+
+  assert.equal(messages.update.title, "新しいバージョンがあるよ！");
+  assert.match(messages.update.versionLine("0.1.7", "0.2.0"), /0\.1\.7/);
+  assert.match(messages.update.versionLine("0.1.7", "0.2.0"), /0\.2\.0/);
+  assert.equal(messages.update.command, "npm install -g @dotlabo/sakunyan-code@latest");
+});
+
+test("npmのバージョン取得に失敗した場合はundefinedを返す", async () => {
+  const previousFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => ({ ok: false, json: async () => ({}) });
+    assert.equal(await fetchLatestSakunyanVersion(), undefined);
+
+    globalThis.fetch = async () => ({ ok: true, json: async () => ({}) });
+    assert.equal(await fetchLatestSakunyanVersion(), undefined);
+
+    globalThis.fetch = async () => ({ ok: true, json: async () => ({ version: "  " }) });
+    assert.equal(await fetchLatestSakunyanVersion(), undefined);
+
+    globalThis.fetch = async () => {
+      throw new Error("network down");
+    };
+    assert.equal(await fetchLatestSakunyanVersion(), undefined);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test("更新確認はバックグラウンドで行い、新しいバージョンがあるときだけwidgetを表示する", async () => {
+  const handlers = new Map();
+  sakunyanExtension({ on: (event, handler) => handlers.set(event, handler) });
+  const theme = { fg: (_color, text) => text, bold: (text) => text };
+  const widgets = new Map();
+  const makeContext = () => ({
+    mode: "tui",
+    hasUI: true,
+    cwd: "/project",
+    isIdle: () => true,
+    modelRegistry: {
+      find: () => ({}),
+      complete: async () => ({ stopReason: "stop" }),
+      getApiKeyForProvider: async () => undefined,
+    },
+    ui: {
+      theme,
+      setHeader() {},
+      setFooter() {},
+      setStatus() {},
+      setWidget: (key, lines) => widgets.set(key, lines),
+      setWorkingMessage() {},
+    },
+  });
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+  const previousFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => ({ ok: true, json: async () => ({ version: "99.0.0" }) });
+    await handlers.get("session_start")({}, makeContext());
+    await settle();
+    const widgetFactory = widgets.get("sakunyan-update");
+    assert.equal(typeof widgetFactory, "function");
+    const notice = widgetFactory({}, theme).render(80).join("\n");
+    assert.match(notice, /─{10,}/);
+    assert.match(notice, /新しいバージョンがあるよ/);
+    assert.match(notice, /99\.0\.0/);
+    assert.match(notice, /npm install -g @dotlabo\/sakunyan-code@latest/);
+    assert.equal(notice.split("\n").at(0), "");
+    assert.equal(notice.split("\n").at(-1), "");
+
+    widgets.clear();
+    globalThis.fetch = async () => ({ ok: true, json: async () => ({ version: SAKUNYAN_VERSION }) });
+    await handlers.get("session_start")({}, makeContext());
+    await settle();
+    assert.equal(widgets.has("sakunyan-update"), false);
+
+    widgets.clear();
+    globalThis.fetch = async () => {
+      throw new Error("network down");
+    };
+    await handlers.get("session_start")({}, makeContext());
+    await settle();
+    assert.equal(widgets.has("sakunyan-update"), false);
+  } finally {
+    globalThis.fetch = previousFetch;
   }
 });
