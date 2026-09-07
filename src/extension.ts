@@ -1,10 +1,12 @@
-import { getAgentDir, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
+import { DynamicBorder, getAgentDir, type ExtensionAPI, type ExtensionContext, type Theme } from "@earendil-works/pi-coding-agent";
+import { matchesKey, truncateToWidth, type TUI } from "@earendil-works/pi-tui";
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { messages } from "./messages.js";
 import { MODEL_ID, MODEL_PROVIDER } from "./model-config.js";
 import { getDefaultMode, SAKUNYAN_MODES, type SakunyanMode } from "./modes.js";
+import { fetchLatestSakunyanVersion, isUpdateAvailable } from "./update-check.js";
+import { SAKUNYAN_VERSION } from "./version.js";
 import {
   fetchKeyStatus,
   KEY_STATUS_BAR_WIDTH,
@@ -277,6 +279,36 @@ function installKeyStatusDisplay(ctx: ExtensionContext): () => void {
   return () => void refresh();
 }
 
+function updateNoticeWidget(latestVersion: string) {
+  return (_tui: TUI, theme: Theme) => ({
+    render: (width: number): string[] => {
+      const border = new DynamicBorder((text) => theme.fg("warning", text)).render(width).at(0) ?? "";
+      const indent = (line: string) => truncateToWidth(` ${line}`, width, "");
+      return [
+        "",
+        border,
+        indent(theme.fg("warning", theme.bold(messages.update.title))),
+        indent(theme.fg("muted", messages.update.versionLine(SAKUNYAN_VERSION, latestVersion))),
+        indent(theme.fg("muted", messages.update.instruction)),
+        indent(theme.fg("accent", messages.update.command)),
+        border,
+        "",
+      ];
+    },
+    invalidate() {},
+  });
+}
+
+async function checkForUpdate(ctx: ExtensionContext): Promise<void> {
+  try {
+    const latestVersion = await fetchLatestSakunyanVersion();
+    if (!latestVersion || !isUpdateAvailable(latestVersion, SAKUNYAN_VERSION)) return;
+    ctx.ui.setWidget("sakunyan-update", updateNoticeWidget(latestVersion), { placement: "aboveEditor" });
+  } catch {
+    return;
+  }
+}
+
 export function sakunyanExtension(pi: ExtensionAPI): void {
   let currentMode = getDefaultMode();
   let activity: {
@@ -337,6 +369,7 @@ export function sakunyanExtension(pi: ExtensionAPI): void {
       keyStatusRefreshers.set(ctx, installKeyStatusDisplay(ctx));
       renderStatus(ctx);
       ctx.ui.setWorkingMessage(messages.ui.thinking);
+      void checkForUpdate(ctx);
     }
   });
 
