@@ -40,6 +40,13 @@ export const messages = {
     invalidKey: "APIキーで接続できなかったみたい。キーを確認して、もう一度入力してね。",
     cancelled: "APIキーの設定をキャンセルしました。",
   },
+  update: {
+    title: "新しいバージョンがあるよ！",
+    versionLine: (current: string, latest: string): string =>
+      `🐈 今のバージョン v${current} → 新しいバージョン v${latest}`,
+    instruction: "終了してから、ターミナルで次のコマンドを実行してね：",
+    command: "npm install -g @dotlabo/sakunyan-code@latest",
+  },
   unsupportedNodeVersion: (current: string, required: string, color = false) => `${paint("1;31", "❌ Node.jsのバージョンが古いため、sakunyanを起動できません。", color)}
 
 現在のバージョン： ${paint("33", `v${current}`, color)}
