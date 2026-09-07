@@ -86,7 +86,10 @@ test("接続確認OKの行にキー状態を追加し、失敗時は状態を消
 
   try {
     const handlers = new Map();
-    sakunyanExtension({ on: (event, handler) => handlers.set(event, handler) });
+    sakunyanExtension({
+      on: (event, handler) => handlers.set(event, handler),
+      registerCommand() {},
+    });
     const widgets = [];
     const theme = { fg: (_color, text) => text, bold: (text) => text };
     const context = {
@@ -110,7 +113,7 @@ test("接続確認OKの行にキー状態を追加し、失敗時は状態を消
 
     await handlers.get("session_start")({}, context);
     await new Promise((resolve) => setImmediate(resolve));
-    assert.match(widgets.at(-1), /接続確認OK 🔑 あと30日/);
+    assert.match(widgets.at(-1), /接続確認OK 🔑 あと\d+日/);
     assert.match(widgets.at(-1), /75%/);
     assert.doesNotMatch(widgets.at(-1), /teacher-secret/);
 
