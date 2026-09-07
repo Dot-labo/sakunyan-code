@@ -27,8 +27,7 @@ sakunyanは、ファイルの変更やGitのコミット・プッシュなどを
 確認します。
 
 ```sh
-node --version
-npm --version
+node --version #v22.19.0以上であることを確認してください。
 ```
 
 ### 2. sakunyanを取得して準備
@@ -45,15 +44,6 @@ npm install -g @dotlabo/sakunyan-code@latest
 npx @dotlabo/sakunyan-code@latest .
 ```
 
-開発版をソースから使う場合は、リポジトリを取得してから次を実行します。
-
-```sh
-git clone https://github.com/dot-labo/sakunyan-code.git
-cd sakunyan-code
-npm install
-npm run build
-npm link
-```
 
 ### 3. 起動
 
@@ -80,10 +70,7 @@ sakunyan /c/Users/名前/projects/my-project
 
 初回起動時に、sakunyanがOpenRouterの固定モデルへ接続できない場合、APIキーの入力画面が表示されます。
 
-- 先生から受け取ったOpenRouter APIキーを入力する
-- Enterで確定する
-- Escで終了する
-- 接続に失敗した場合は、キーを確認して再入力する
+APIキーは、Dot.laboポータルサイトの「APIキー」発行画面から発行することができます。
 
 接続に成功すると、APIキーはsakunyan専用の保存先へ保存され、次回から再入力せずに使えます。APIキーはログやエラーメッセージには表示されません。
 
@@ -116,7 +103,7 @@ pi本体の保存先(`~/.pi/`)は変更・削除しません。piとsakunyanで�
 ## 起動後の表示
 
 ```text
-sakunyan code (v0.1.9)へようこそ！
+sakunyan code (バージョン)へようこそ！
 作業フォルダ：現在のフォルダ
 🐱 質問を入力してね（Ctrl+Cを2回で終了）
 ```
