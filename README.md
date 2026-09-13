@@ -32,7 +32,7 @@ node --version #v22.19.0以上であることを確認してください。
 
 ### 2. sakunyanを取得して準備
 
-公開後は、ターミナル（WindowsはPowerShellまたはGit Bash）で次を実行します。
+sakunyan codeをインストールするためには、ターミナル（WindowsはPowerShellまたはGit Bash）で次を実行します。
 
 ```sh
 npm install -g @dotlabo/sakunyan-code@latest
