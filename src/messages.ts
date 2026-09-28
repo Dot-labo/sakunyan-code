@@ -8,6 +8,7 @@ export const messages = {
     logo: SAKUNYAN_LOGO,
     header: `sakunyan code (v${SAKUNYAN_VERSION})へようこそ！`,
     workingDirectory: "作業フォルダ：",
+    runtimeOS: "ユーザーの環境：",
     idleIcon: "🐱",
     workingIcon: "🐈",
     waiting: "質問を入力してね（Ctrl+Cを2回で終了）",

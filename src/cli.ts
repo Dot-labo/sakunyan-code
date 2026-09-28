@@ -7,6 +7,7 @@ import { dirname, resolve } from "node:path";
 import { sakunyanExtension } from "./extension.js";
 import { messages } from "./messages.js";
 import { MODEL_ARGS } from "./model-config.js";
+import { getDefaultMode } from "./modes.js";
 import { MIN_NODE_VERSION, supportsNodeVersion } from "./node-version.js";
 
 process.env.PI_CODING_AGENT = "true";
@@ -56,13 +57,15 @@ async function run(): Promise<void> {
     const { main } = await import("@earendil-works/pi-coding-agent");
     await main(
       [
+        ...args,
+        ...MODEL_ARGS,
         "--no-extensions",
         "--no-skills",
         "--no-prompt-templates",
-        ...args,
-        ...MODEL_ARGS,
+        "--no-approve",
+        "--no-context-files",
         "--tools",
-        "read,grep,find,ls,bash",
+        getDefaultMode().tools.join(","),
       ],
       {
         extensionFactories: [{ name: "sakunyan", factory: sakunyanExtension, hidden: true }],

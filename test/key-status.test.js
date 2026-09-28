@@ -81,7 +81,9 @@ test("接続確認OKの行にキー状態を追加し、失敗時は状態を消
   const previousFetch = globalThis.fetch;
   let available = true;
   globalThis.fetch = async () => available
-    ? new Response(JSON.stringify(metadata()), { status: 200 })
+    ? new Response(JSON.stringify(metadata({
+      expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    })), { status: 200 })
     : new Response("", { status: 503 });
 
   try {
@@ -89,6 +91,7 @@ test("接続確認OKの行にキー状態を追加し、失敗時は状態を消
     sakunyanExtension({
       on: (event, handler) => handlers.set(event, handler),
       registerCommand() {},
+      setActiveTools() {},
     });
     const widgets = [];
     const theme = { fg: (_color, text) => text, bold: (text) => text };
