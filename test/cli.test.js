@@ -9,6 +9,7 @@ import { messages } from "../dist/messages.js";
 import { MODEL_ARGS, MODEL_ID, MODEL_PROVIDER, MODEL_REFERENCE } from "../dist/model-config.js";
 import { DEFAULT_MODE_ID, getDefaultMode, SAKUNYAN_MODES } from "../dist/modes.js";
 import { supportsNodeVersion } from "../dist/node-version.js";
+import { detectRuntimeOS, formatRuntimeOS, getRuntimeOS } from "../dist/runtime-os.js";
 import { fetchLatestSakunyanVersion, isUpdateAvailable } from "../dist/update-check.js";
 import { SAKUNYAN_VERSION } from "../dist/version.js";
 
@@ -24,7 +25,8 @@ test("対象フォルダを必須にする", async () => {
   assert.equal(supportsNodeVersion("24.0.0"), true);
   assert.match(messages.unsupportedNodeVersion("22.14.0", "22.19.0"), /node --version/);
   assert.match(getDefaultMode().prompt, /子どもにも理解できる言葉/);
-  assert.match(getDefaultMode().prompt, /Gitのコミット・プッシュ/);
+  assert.match(getDefaultMode().prompt, /Gitを含むコマンドは自分で実行せず/);
+  assert.deepEqual(getDefaultMode().tools, ["read", "grep", "find", "ls"]);
   assert.deepEqual(MODEL_ARGS, ["--provider", MODEL_PROVIDER, "--model", MODEL_REFERENCE]);
 
   const missing = run();
@@ -56,6 +58,12 @@ test("対象フォルダを必須にする", async () => {
   const home = run("~", "--version");
   assert.equal(home.status, 0);
 
+  const launcher = readFileSync("src/cli.ts", "utf8");
+  for (const option of ["--no-extensions", "--no-skills", "--no-prompt-templates", "--no-approve", "--no-context-files"]) {
+    assert.match(launcher, new RegExp(`"${option}"`));
+  }
+  assert.match(launcher, /"--tools",\s*getDefaultMode\(\)\.tools\.join\(","\)/);
+
   assert.match(messages.targetRequired("/project", true), /\x1b\[/);
   assert.doesNotMatch(messages.targetRequired("/project"), /\x1b\[/);
 
@@ -64,6 +72,7 @@ test("対象フォルダを必須にする", async () => {
   sakunyanExtension({
     on: (event, handler) => handlers.set(event, handler),
     registerCommand: (name, command) => commands.set(name, command),
+    setActiveTools: (tools) => assert.deepEqual(tools, getDefaultMode().tools),
   });
   assert.deepEqual([...handlers.keys()], [
     "before_agent_start",
@@ -106,6 +115,8 @@ test("対象フォルダを必須にする", async () => {
   assert.match(header.join("\n"), /sakunyan code/);
   assert.match(header.join("\n"), /____/);
   assert.match(header.join("\n"), /\/project/);
+  assert.match(header.join("\n"), /作業フォルダ： 📁 \/project/);
+  assert.ok(header.includes(`ユーザーの環境： ${formatRuntimeOS(getRuntimeOS())}`));
   assert.match(header.join("\n"), welcomePattern);
   assert.match(status, /質問を入力してね（Ctrl\+Cを2回で終了）/);
   assert.match(status, /アドバイスモード/);
@@ -113,9 +124,21 @@ test("対象フォルダを必須にする", async () => {
 });
 
 test("応答モードを選択し、次のターンへプロンプトを適用する", async () => {
+  assert.equal(detectRuntimeOS("win32"), "Windows");
+  assert.equal(detectRuntimeOS("darwin"), "macOS");
+  assert.equal(detectRuntimeOS("linux", true), "Chromebook");
+  assert.equal(detectRuntimeOS("linux"), "Linux");
+  assert.equal(detectRuntimeOS("unknown"), "Windows");
+  assert.equal(formatRuntimeOS("Windows"), "🪟 Windows");
+  assert.equal(formatRuntimeOS("macOS"), "🍎 macOS");
+  assert.equal(formatRuntimeOS("Chromebook"), "🌐 Chromebook");
+  assert.equal(formatRuntimeOS("Linux"), "🐧 Linux");
+
   assert.equal(new Set(SAKUNYAN_MODES.map(({ id }) => id)).size, SAKUNYAN_MODES.length);
   assert.ok(SAKUNYAN_MODES.every((mode) => [mode.id, mode.name, mode.description, mode.notice, mode.prompt]
     .every((value) => value.trim().length > 0)));
+  assert.ok(SAKUNYAN_MODES.every((mode) => mode.tools.length > 0 && mode.tools.every((tool) =>
+    ["read", "grep", "find", "ls"].includes(tool))));
   assert.equal(getDefaultMode().id, DEFAULT_MODE_ID);
   assert.match(getDefaultMode().name, /[ぁ-んァ-ヶ一-龠]/);
 
@@ -123,9 +146,11 @@ test("応答モードを選択し、次のターンへプロンプトを適用�
   assert.ok(sampleMode);
   const handlers = new Map();
   const commands = new Map();
+  const appliedTools = [];
   sakunyanExtension({
     on: (event, handler) => handlers.set(event, handler),
     registerCommand: (name, command) => commands.set(name, command),
+    setActiveTools: (tools) => appliedTools.push(tools),
   });
 
   const statuses = [];
@@ -172,12 +197,14 @@ test("応答モードを選択し、次のターンへプロンプトを適用�
   };
 
   await commands.get("mode").handler("", context);
+  assert.deepEqual(appliedTools, [sampleMode.tools]);
   assert.equal(renders, 3);
   assert.deepEqual(notifications, [messages.ui.modeChanged(sampleMode.name)]);
   assert.match(statuses.at(-1), /大阪弁モード/);
 
   const applied = await handlers.get("before_agent_start")({ systemPrompt: "BASE_PROMPT" }, context);
-  assert.equal(applied.systemPrompt, `BASE_PROMPT\n\n${sampleMode.prompt}`);
+  assert.ok(applied.systemPrompt.startsWith(`BASE_PROMPT\n\n${sampleMode.prompt}\n\n`));
+  assert.match(applied.systemPrompt, new RegExp(`利用者の実行環境は${getRuntimeOS()}です`));
   assert.strictEqual(context.model, model);
   assert.strictEqual(context.sessionManager, sessionManager);
   assert.strictEqual(context.tools, tools);
@@ -202,8 +229,9 @@ test("応答モードを選択し、次のターンへプロンプトを適用�
   };
   await commands.get("mode").handler("", context);
   assert.equal(notifications.length, 1);
+  assert.equal(appliedTools.length, 1);
   const afterCancel = await handlers.get("before_agent_start")({ systemPrompt: "BASE_PROMPT" }, context);
-  assert.equal(afterCancel.systemPrompt, `BASE_PROMPT\n\n${sampleMode.prompt}`);
+  assert.equal(afterCancel.systemPrompt, applied.systemPrompt);
 
   context.ui.custom = async (factory) => {
     let result;
@@ -213,10 +241,14 @@ test("応答モードを選択し、次のターンへプロンプトを適用�
   };
   await commands.get("mode").handler("", context);
   assert.equal(notifications.length, 1);
+  assert.equal(appliedTools.length, 1);
 
   await handlers.get("session_start")({}, context);
+  assert.deepEqual(appliedTools.at(-1), getDefaultMode().tools);
+  assert.equal(appliedTools.length, 2);
   const afterRestart = await handlers.get("before_agent_start")({ systemPrompt: "BASE_PROMPT" }, context);
-  assert.equal(afterRestart.systemPrompt, `BASE_PROMPT\n\n${getDefaultMode().prompt}`);
+  assert.match(afterRestart.systemPrompt, new RegExp(`利用者の実行環境は${getRuntimeOS()}です`));
+  assert.ok(afterRestart.systemPrompt.includes(getDefaultMode().prompt));
   assert.match(statuses.at(-1), /アドバイスモード/);
 });
 
@@ -234,6 +266,7 @@ test("APIキー入力後に接続確認を再試行し、入力値を表示す�
   sakunyanExtension({
     on: (event, handler) => handlers.set(event, handler),
     registerCommand() {},
+    setActiveTools() {},
   });
   let attempts = 0;
   let component;
@@ -381,6 +414,7 @@ test("更新確認はバックグラウンドで行い、新しいバージョ�
   sakunyanExtension({
     on: (event, handler) => handlers.set(event, handler),
     registerCommand() {},
+    setActiveTools() {},
   });
   const theme = { fg: (_color, text) => text, bold: (text) => text };
   const widgets = new Map();

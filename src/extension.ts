@@ -7,6 +7,7 @@ import { MODEL_ID, MODEL_PROVIDER } from "./model-config.js";
 import { getDefaultMode, SAKUNYAN_MODES, type SakunyanMode } from "./modes.js";
 import { fetchLatestSakunyanVersion, isUpdateAvailable } from "./update-check.js";
 import { SAKUNYAN_VERSION } from "./version.js";
+import { formatRuntimeOS, getRuntimeOS } from "./runtime-os.js";
 import {
   fetchKeyStatus,
   KEY_STATUS_BAR_WIDTH,
@@ -311,6 +312,7 @@ async function checkForUpdate(ctx: ExtensionContext): Promise<void> {
 
 export function sakunyanExtension(pi: ExtensionAPI): void {
   let currentMode = getDefaultMode();
+  const runtimeOS = getRuntimeOS();
   let activity: {
     color: "accent" | "success";
     icon: string;
@@ -340,6 +342,7 @@ export function sakunyanExtension(pi: ExtensionAPI): void {
       if (ctx.mode !== "tui") return;
       const selectedMode = await selectMode(ctx, currentMode.id);
       if (!selectedMode) return;
+      pi.setActiveTools([...selectedMode.tools]);
       currentMode = selectedMode;
       renderStatus(ctx);
       ctx.ui.notify(messages.ui.modeChanged(currentMode.name), "info");
@@ -347,20 +350,22 @@ export function sakunyanExtension(pi: ExtensionAPI): void {
   });
 
   pi.on("before_agent_start", (event) => ({
-    systemPrompt: `${event.systemPrompt}\n\n${currentMode.prompt}`,
+    systemPrompt: `${event.systemPrompt}\n\n${currentMode.prompt}\n\n利用者の実行環境は${runtimeOS}です。操作手順やコマンドはこの環境に合わせて案内してください。ChromebookではLinux開発環境のターミナルを想定してください。シェルが不明で手順が異なる場合は確認してください。利用者が別の環境やリモート環境について質問した場合は、その指定を優先してください。`,
   }));
 
   pi.on("session_start", async (_event, ctx) => {
     if (ctx.mode !== "tui") return;
 
     currentMode = getDefaultMode();
+    pi.setActiveTools([...currentMode.tools]);
     activity = { color: "success", icon: messages.ui.idleIcon, text: messages.ui.waiting };
 
     ctx.ui.setHeader((_tui, theme) => ({
       render: () => [
         ...messages.ui.logo.map((line: string) => theme.fg("accent", line)),
         theme.fg("success", theme.bold(messages.ui.header)),
-        `${theme.fg("muted", messages.ui.workingDirectory)} ${theme.fg("accent", ctx.cwd)}`,
+        `${theme.fg("muted", messages.ui.workingDirectory)} ${theme.fg("accent", `📁 ${ctx.cwd}`)}`,
+        `${theme.fg("muted", messages.ui.runtimeOS)} ${theme.fg("accent", formatRuntimeOS(runtimeOS))}`,
         "",
       ],
       invalidate() {},
