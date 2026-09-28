@@ -409,7 +409,7 @@ test("npmのバージョン取得に失敗した場合はundefinedを返す", as
   }
 });
 
-test("更新確認はバックグラウンドで行い、新しいバージョンがあるときだけwidgetを表示する", async () => {
+test("APIキー未設定でも更新確認を始め、新しいバージョンがあるときだけwidgetを表示する", async () => {
   const handlers = new Map();
   sakunyanExtension({
     on: (event, handler) => handlers.set(event, handler),
@@ -441,6 +441,16 @@ test("更新確認はバックグラウンドで行い、新しいバージョ�
   const previousFetch = globalThis.fetch;
   try {
     globalThis.fetch = async () => ({ ok: true, json: async () => ({ version: "99.0.0" }) });
+    const noApiKey = makeContext();
+    noApiKey.modelRegistry.find = () => undefined;
+    noApiKey.ui.custom = async () => undefined;
+    noApiKey.ui.notify = () => {};
+    noApiKey.shutdown = () => {};
+    await handlers.get("session_start")({}, noApiKey);
+    await settle();
+    assert.equal(typeof widgets.get("sakunyan-update"), "function");
+
+    widgets.clear();
     await handlers.get("session_start")({}, makeContext());
     await settle();
     const widgetFactory = widgets.get("sakunyan-update");

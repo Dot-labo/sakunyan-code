@@ -370,11 +370,11 @@ export function sakunyanExtension(pi: ExtensionAPI): void {
       ],
       invalidate() {},
     }));
+    void checkForUpdate(ctx);
     if (await setupModel(ctx)) {
       keyStatusRefreshers.set(ctx, installKeyStatusDisplay(ctx));
       renderStatus(ctx);
       ctx.ui.setWorkingMessage(messages.ui.thinking);
-      void checkForUpdate(ctx);
     }
   });
 
