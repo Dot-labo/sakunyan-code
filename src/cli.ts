@@ -4,7 +4,6 @@ import "./agent-dir.js";
 import { statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
-import { sakunyanExtension } from "./extension.js";
 import { messages } from "./messages.js";
 import { MODEL_ARGS } from "./model-config.js";
 import { getDefaultMode } from "./modes.js";
@@ -54,23 +53,39 @@ async function run(): Promise<void> {
 
   if (isDirectory) {
     process.chdir(targetPath);
-    const { main } = await import("@earendil-works/pi-coding-agent");
-    await main(
-      [
-        ...args,
-        ...MODEL_ARGS,
-        "--no-extensions",
-        "--no-skills",
-        "--no-prompt-templates",
-        "--no-approve",
-        "--no-context-files",
-        "--tools",
-        getDefaultMode().tools.join(","),
-      ],
-      {
-        extensionFactories: [{ name: "sakunyan", factory: sakunyanExtension, hidden: true }],
-      },
+    const showStartup = Boolean(
+      process.stdin.isTTY && process.stdout.isTTY && process.stderr.isTTY &&
+      !args.includes("--version") && !args.includes("--help"),
     );
+    if (showStartup) process.stderr.write("🐾 さくにゃんを起動中…\n");
+
+    try {
+      const [{ main }, { sakunyanExtension }] = await Promise.all([
+        import("@earendil-works/pi-coding-agent"),
+        import("./extension.js"),
+      ]);
+      if (showStartup) process.stderr.write("🐾 設定と画面を準備中…\n");
+      await main(
+        [
+          ...args,
+          ...MODEL_ARGS,
+          "--no-extensions",
+          "--no-skills",
+          "--no-prompt-templates",
+          "--no-approve",
+          "--no-context-files",
+          "--tools",
+          getDefaultMode().tools.join(","),
+        ],
+        {
+          extensionFactories: [{ name: "sakunyan", factory: sakunyanExtension, hidden: true }],
+        },
+      );
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      process.stderr.write(`❌ 起動できませんでした。再インストールしても直らない場合は、表示されたエラーを先生に伝えてください。\n${detail}\n`);
+      process.exitCode = 1;
+    }
   } else if (process.exitCode === undefined) {
     process.stderr.write(messages.targetNotDirectory(inputPath, useColor));
     process.exitCode = 1;

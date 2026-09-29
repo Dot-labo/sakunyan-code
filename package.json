@@ -24,7 +24,6 @@
     "typescript": "^5.7.0"
   },
   "dependencies": {
-    "@dotlabo/sakunyan-code": "^0.1.4",
     "@earendil-works/pi-coding-agent": "0.84.2",
     "@earendil-works/pi-tui": "0.84.2",
     "figlet": "^1.11.4"
