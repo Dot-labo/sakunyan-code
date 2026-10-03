@@ -1,10 +1,17 @@
 import { DynamicBorder, getAgentDir, type ExtensionAPI, type ExtensionContext, type Theme } from "@earendil-works/pi-coding-agent";
-import { matchesKey, truncateToWidth, type TUI } from "@earendil-works/pi-tui";
+import { matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi, type TUI } from "@earendil-works/pi-tui";
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { messages } from "./messages.js";
 import { MODEL_ID, MODEL_PROVIDER } from "./model-config.js";
 import { getDefaultMode, SAKUNYAN_MODES, type SakunyanMode } from "./modes.js";
+import {
+  classroomRulesNotice,
+  ensureClassroomRulesFile,
+  formatClassroomRulesPrompt,
+  getClassroomRulesPath,
+  loadClassroomRules,
+} from "./classroom-rules.js";
 import { fetchLatestSakunyanVersion, isUpdateAvailable } from "./update-check.js";
 import { SAKUNYAN_VERSION } from "./version.js";
 import { formatRuntimeOS, getRuntimeOS } from "./runtime-os.js";
@@ -353,36 +360,74 @@ export function sakunyanExtension(pi: ExtensionAPI): void {
     },
   });
 
-  pi.on("before_agent_start", (event) => ({
-    systemPrompt: `${event.systemPrompt}\n\n${currentMode.prompt}\n\n利用者の実行環境は${runtimeOS}です。操作手順やコマンドはこの環境に合わせて案内してください。ChromebookではLinux開発環境のターミナルを想定してください。シェルが不明で手順が異なる場合は確認してください。利用者が別の環境やリモート環境について質問した場合は、その指定を優先してください。`,
-  }));
+  // 教室共通のルールは、応答のたびに決まった1か所（sakunyan専用フォルダ）から読み直す。
+  // 読めない状態になったときは、状態が変わったときに1回だけ画面で知らせる。
+  let lastRulesNotice: string | undefined;
+  const readClassroomRules = (ctx: ExtensionContext) => {
+    const path = getClassroomRulesPath(getAgentDir());
+    const rules = loadClassroomRules(path);
+    const notice = classroomRulesNotice(rules, path);
+    if (notice && notice !== lastRulesNotice && ctx.mode === "tui") ctx.ui.notify(notice, "warning");
+    lastRulesNotice = notice;
+    return rules;
+  };
+
+  // 組み立て順: piの基本 → 応答モード → 実行環境 → 教室共通のルール（囲みと、囲みの後ろの優先順位の指示）。
+  // ルールファイルの中身は、モードの指示を置き換えず、最後の指示にもならない。
+  pi.on("before_agent_start", (event, ctx) => {
+    const rulesPrompt = formatClassroomRulesPrompt(readClassroomRules(ctx));
+    return {
+      systemPrompt: `${event.systemPrompt}\n\n${currentMode.prompt}\n\n利用者の実行環境は${runtimeOS}です。操作手順やコマンドはこの環境に合わせて案内してください。ChromebookではLinux開発環境のターミナルを想定してください。シェルが不明で手順が異なる場合は確認してください。利用者が別の環境やリモート環境について質問した場合は、その指定を優先してください。${rulesPrompt ? `\n\n${rulesPrompt}` : ""}`,
+    };
+  });
 
   pi.on("session_start", async (event, ctx) => {
     if (ctx.mode !== "tui") return;
     const tip = event.reason === "startup" ? startupTip : undefined;
+    const rulesPath = getClassroomRulesPath(getAgentDir());
 
     currentMode = getDefaultMode();
     pi.setActiveTools([...currentMode.tools]);
     activity = { color: "success", icon: messages.ui.idleIcon, text: messages.ui.waiting };
 
-    ctx.ui.setHeader((_tui, theme) => ({
-      // 幅を超える行があるとTUIが異常終了するため、ロゴなどは幅で切り詰め、ヒントは折り返す。
-      render: (width?: number) => {
-        const fit = (line: string) => (width !== undefined && width > 0 ? truncateToWidth(line, width, "") : line);
+    ctx.ui.setHeader((_tui, theme) => {
+      // 場所は途中で切らない。1行に収まらない幅では、ラベルの次の行から、幅に合わせて折り返す。
+      const rulesLocationLines = (width?: number): string[] => {
+        const label = messages.ui.classroomRules;
+        if (width === undefined || width <= 0 || visibleWidth(`${label} 📄 ${rulesPath}`) <= width) {
+          return [`${theme.fg("muted", label)} ${theme.fg("accent", `📄 ${rulesPath}`)}`];
+        }
         return [
-          ...messages.ui.logo.map((line: string) => fit(theme.fg("accent", line))),
-          fit(theme.fg("success", theme.bold(messages.ui.header))),
-          fit(`${theme.fg("muted", messages.ui.workingDirectory)} ${theme.fg("accent", `📁 ${ctx.cwd}`)}`),
-          fit(`${theme.fg("muted", messages.ui.runtimeOS)} ${theme.fg("accent", formatRuntimeOS(runtimeOS))}`),
-          // ヒントは前後を1行あけて、起動の待ち時間（接続確認の間）に目に入りやすくする。
-          ...(tip ? [""] : []),
-          ...formatTipLines(tip, width).map((line) => theme.fg("muted", line)),
-          "",
+          truncateToWidth(`${theme.fg("muted", label)} ${theme.fg("accent", "📄")}`, width, ""),
+          ...wrapTextWithAnsi(rulesPath, width).map((line) => theme.fg("accent", line)),
         ];
-      },
-      invalidate() {},
-    }));
+      };
+      return {
+        // 幅を超える行があるとTUIが異常終了するため、ロゴなどは幅で切り詰め、ヒントは折り返す。
+        render: (width?: number) => {
+          const fit = (line: string) => (width !== undefined && width > 0 ? truncateToWidth(line, width, "") : line);
+          return [
+            ...messages.ui.logo.map((line: string) => fit(theme.fg("accent", line))),
+            fit(theme.fg("success", theme.bold(messages.ui.header))),
+            fit(`${theme.fg("muted", messages.ui.workingDirectory)} ${theme.fg("accent", `📁 ${ctx.cwd}`)}`),
+            fit(`${theme.fg("muted", messages.ui.runtimeOS)} ${theme.fg("accent", formatRuntimeOS(runtimeOS))}`),
+            ...rulesLocationLines(width),
+            // ヒントは前後を1行あけて、起動の待ち時間（接続確認の間）に目に入りやすくする。
+            ...(tip ? [""] : []),
+            ...formatTipLines(tip, width).map((line) => theme.fg("muted", line)),
+            "",
+          ];
+        },
+        invalidate() {},
+      };
+    });
     void checkForUpdate(ctx);
+    // ルールファイルがなければ、起動したときに初期の内容で作る（すでにあるファイルは変更しない）。
+    if (event.reason === "startup" && ensureClassroomRulesFile(rulesPath) === "created") {
+      ctx.ui.notify(messages.ui.classroomRulesCreated(rulesPath), "info");
+    }
+    lastRulesNotice = undefined;
+    readClassroomRules(ctx);
     if (await setupModel(ctx)) {
       keyStatusRefreshers.set(ctx, installKeyStatusDisplay(ctx));
       renderStatus(ctx);

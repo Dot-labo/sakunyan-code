@@ -9,6 +9,8 @@ export const messages = {
     header: `sakunyan code (v${SAKUNYAN_VERSION})へようこそ！`,
     workingDirectory: "作業フォルダ：",
     runtimeOS: "ユーザーの環境：",
+    classroomRules: "教室のルール：",
+    classroomRulesCreated: (path: string) => `📄 教室共通のルールファイルを作ったよ：${path}`,
     idleIcon: "🐱",
     workingIcon: "🐈",
     waiting: "質問を入力してね（Ctrl+Cを2回で終了）",
