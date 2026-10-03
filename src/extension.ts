@@ -311,7 +311,7 @@ async function checkForUpdate(ctx: ExtensionContext): Promise<void> {
 }
 
 // ヒントは起動ごとに1件だけ選び、画面のヘッダーにだけ表示する（system promptには入れない）。
-// /new や /resume でセッションが切り替わっても、同じ起動の中では同じヒントのままにする。
+// 表示するのは起動したときの1回だけ。/new や /resume などでヘッダーを描き直すときは、ヒントを出さない。
 const startupTip = selectTip(getTipOS());
 
 export function sakunyanExtension(pi: ExtensionAPI): void {
@@ -357,8 +357,9 @@ export function sakunyanExtension(pi: ExtensionAPI): void {
     systemPrompt: `${event.systemPrompt}\n\n${currentMode.prompt}\n\n利用者の実行環境は${runtimeOS}です。操作手順やコマンドはこの環境に合わせて案内してください。ChromebookではLinux開発環境のターミナルを想定してください。シェルが不明で手順が異なる場合は確認してください。利用者が別の環境やリモート環境について質問した場合は、その指定を優先してください。`,
   }));
 
-  pi.on("session_start", async (_event, ctx) => {
+  pi.on("session_start", async (event, ctx) => {
     if (ctx.mode !== "tui") return;
+    const tip = event.reason === "startup" ? startupTip : undefined;
 
     currentMode = getDefaultMode();
     pi.setActiveTools([...currentMode.tools]);
@@ -374,8 +375,8 @@ export function sakunyanExtension(pi: ExtensionAPI): void {
           fit(`${theme.fg("muted", messages.ui.workingDirectory)} ${theme.fg("accent", `📁 ${ctx.cwd}`)}`),
           fit(`${theme.fg("muted", messages.ui.runtimeOS)} ${theme.fg("accent", formatRuntimeOS(runtimeOS))}`),
           // ヒントは前後を1行あけて、起動の待ち時間（接続確認の間）に目に入りやすくする。
-          ...(startupTip ? [""] : []),
-          ...formatTipLines(startupTip, width).map((line) => theme.fg("muted", line)),
+          ...(tip ? [""] : []),
+          ...formatTipLines(tip, width).map((line) => theme.fg("muted", line)),
           "",
         ];
       },
