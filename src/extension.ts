@@ -1,5 +1,5 @@
 import { DynamicBorder, getAgentDir, type ExtensionAPI, type ExtensionContext, type Theme } from "@earendil-works/pi-coding-agent";
-import { matchesKey, truncateToWidth, type TUI } from "@earendil-works/pi-tui";
+import { matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi, type TUI } from "@earendil-works/pi-tui";
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { messages } from "./messages.js";
@@ -390,24 +390,37 @@ export function sakunyanExtension(pi: ExtensionAPI): void {
     pi.setActiveTools([...currentMode.tools]);
     activity = { color: "success", icon: messages.ui.idleIcon, text: messages.ui.waiting };
 
-    ctx.ui.setHeader((_tui, theme) => ({
-      // 幅を超える行があるとTUIが異常終了するため、ロゴなどは幅で切り詰め、ヒントは折り返す。
-      render: (width?: number) => {
-        const fit = (line: string) => (width !== undefined && width > 0 ? truncateToWidth(line, width, "") : line);
+    ctx.ui.setHeader((_tui, theme) => {
+      // 場所は途中で切らない。1行に収まらない幅では、ラベルの次の行から、幅に合わせて折り返す。
+      const rulesLocationLines = (width?: number): string[] => {
+        const label = messages.ui.classroomRules;
+        if (width === undefined || width <= 0 || visibleWidth(`${label} 📄 ${rulesPath}`) <= width) {
+          return [`${theme.fg("muted", label)} ${theme.fg("accent", `📄 ${rulesPath}`)}`];
+        }
         return [
-          ...messages.ui.logo.map((line: string) => fit(theme.fg("accent", line))),
-          fit(theme.fg("success", theme.bold(messages.ui.header))),
-          fit(`${theme.fg("muted", messages.ui.workingDirectory)} ${theme.fg("accent", `📁 ${ctx.cwd}`)}`),
-          fit(`${theme.fg("muted", messages.ui.runtimeOS)} ${theme.fg("accent", formatRuntimeOS(runtimeOS))}`),
-          fit(`${theme.fg("muted", messages.ui.classroomRules)} ${theme.fg("accent", `📄 ${rulesPath}`)}`),
-          // ヒントは前後を1行あけて、起動の待ち時間（接続確認の間）に目に入りやすくする。
-          ...(tip ? [""] : []),
-          ...formatTipLines(tip, width).map((line) => theme.fg("muted", line)),
-          "",
+          truncateToWidth(`${theme.fg("muted", label)} ${theme.fg("accent", "📄")}`, width, ""),
+          ...wrapTextWithAnsi(rulesPath, width).map((line) => theme.fg("accent", line)),
         ];
-      },
-      invalidate() {},
-    }));
+      };
+      return {
+        // 幅を超える行があるとTUIが異常終了するため、ロゴなどは幅で切り詰め、ヒントは折り返す。
+        render: (width?: number) => {
+          const fit = (line: string) => (width !== undefined && width > 0 ? truncateToWidth(line, width, "") : line);
+          return [
+            ...messages.ui.logo.map((line: string) => fit(theme.fg("accent", line))),
+            fit(theme.fg("success", theme.bold(messages.ui.header))),
+            fit(`${theme.fg("muted", messages.ui.workingDirectory)} ${theme.fg("accent", `📁 ${ctx.cwd}`)}`),
+            fit(`${theme.fg("muted", messages.ui.runtimeOS)} ${theme.fg("accent", formatRuntimeOS(runtimeOS))}`),
+            ...rulesLocationLines(width),
+            // ヒントは前後を1行あけて、起動の待ち時間（接続確認の間）に目に入りやすくする。
+            ...(tip ? [""] : []),
+            ...formatTipLines(tip, width).map((line) => theme.fg("muted", line)),
+            "",
+          ];
+        },
+        invalidate() {},
+      };
+    });
     void checkForUpdate(ctx);
     // ルールファイルがなければ、起動したときに初期の内容で作る（すでにあるファイルは変更しない）。
     if (event.reason === "startup" && ensureClassroomRulesFile(rulesPath) === "created") {

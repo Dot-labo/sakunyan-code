@@ -205,6 +205,11 @@ test("起動画面のヘッダーにヒントを1件表示し、system promptに
   const start = narrow.findIndex((line) => line.startsWith(TIP_LABEL));
   assert.ok(narrow.slice(start, -1).length > 1);
   assert.ok(narrow.every((line) => visibleWidth(line) <= 30), narrow.join("|"));
+  // 教室のルールの場所は、途中で切らずに折り返す（つなげると、広い幅のときと同じ場所になる）。
+  const location = wide.find((line) => line.includes("教室のルール：")).split("📄 ")[1];
+  const labelIndex = narrow.findIndex((line) => line.includes("教室のルール："));
+  assert.equal(narrow.slice(labelIndex + 1, narrow.indexOf("", labelIndex)).join(""), location);
+  assert.equal(narrow[labelIndex], "教室のルール： 📄");
 
   const { systemPrompt } = await handlers.get("before_agent_start")({ systemPrompt: "BASE_PROMPT" }, {});
   assert.doesNotMatch(systemPrompt, /ヒント/);
