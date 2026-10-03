@@ -1,8 +1,16 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { after, test } from "node:test";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { sakunyanExtension } from "../dist/extension.js";
 import { formatTipLines, getTipOS, SAKUNYAN_TIPS, selectTip, TIP_LABEL } from "../dist/tips.js";
+
+// 起動時に教室共通のルールファイルを作るので、sakunyan専用フォルダを一時フォルダに向ける。
+const agentDir = mkdtempSync(join(tmpdir(), "sakunyan-tips-"));
+process.env.PI_CODING_AGENT_DIR = agentDir;
+after(() => rmSync(agentDir, { recursive: true, force: true }));
 
 const allOS = ["Windows", "macOS", "Chromebook", "Linux"];
 const textsFor = (os) => {
@@ -168,6 +176,7 @@ async function startSession(reason = "startup") {
         setStatus() {},
         setWidget() {},
         setWorkingMessage() {},
+        notify() {},
       },
     });
   } finally {
@@ -186,8 +195,9 @@ test("起動画面のヘッダーにヒントを1件表示し、system promptに
   assert.ok(textsFor(getTipOS()).includes(shown));
   // 描画し直しても同じヒントのまま。
   assert.deepEqual(header.render(200), wide);
-  // ヒントは「ユーザーの環境」の下に、前後を1行ずつあけて表示する。
-  const envIndex = wide.findIndex((line) => line.includes("ユーザーの環境："));
+  // ヒントは「ユーザーの環境」「教室のルール」の下に、前後を1行ずつあけて表示する。
+  assert.ok(wide.findIndex((line) => line.includes("ユーザーの環境：")) + 1 === wide.findIndex((line) => line.includes("教室のルール：")));
+  const envIndex = wide.findIndex((line) => line.includes("教室のルール："));
   assert.deepEqual(wide.slice(envIndex + 1), ["", tipLines[0], ""]);
 
   // 幅が狭いときは、ヒントを折り返し、ロゴなどの行も幅を超えない（超えるとTUIが異常終了する）。
@@ -214,7 +224,7 @@ test("ヒントは起動したときだけ表示し、/new や /resume のあと
     }
     // ロゴなど、ヒント以外の部分は起動時と同じ。ヒントの行と、その前の空行だけがなくなる。
     const wide = header.render(200);
-    const envIndex = startup.findIndex((line) => line.includes("ユーザーの環境："));
+    const envIndex = startup.findIndex((line) => line.includes("教室のルール："));
     assert.deepEqual(wide, [...startup.slice(0, envIndex + 1), ""], reason);
   }
 });
