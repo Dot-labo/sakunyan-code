@@ -373,6 +373,8 @@ export function sakunyanExtension(pi: ExtensionAPI): void {
           fit(theme.fg("success", theme.bold(messages.ui.header))),
           fit(`${theme.fg("muted", messages.ui.workingDirectory)} ${theme.fg("accent", `📁 ${ctx.cwd}`)}`),
           fit(`${theme.fg("muted", messages.ui.runtimeOS)} ${theme.fg("accent", formatRuntimeOS(runtimeOS))}`),
+          // ヒントは前後を1行あけて、起動の待ち時間（接続確認の間）に目に入りやすくする。
+          ...(startupTip ? [""] : []),
           ...formatTipLines(startupTip, width).map((line) => theme.fg("muted", line)),
           "",
         ];
