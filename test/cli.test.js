@@ -51,11 +51,11 @@ test("対象フォルダを必須にする", async () => {
   assert.match(unknown.stderr, /pwd/);
   assert.match(unknown.stderr, /cd \.\./);
 
-  const valid = run(".", "--version");
+  const valid = run("--", ".", "--version");
   assert.equal(valid.status, 0);
   assert.match(valid.stdout, /0\.84\.2/);
 
-  const home = run("~", "--version");
+  const home = run("--", "~", "--version");
   assert.equal(home.status, 0);
 
   const launcher = readFileSync("src/cli.ts", "utf8");
@@ -356,7 +356,7 @@ test("sakunyanの保存先はpi標準のディレクトリから分離される"
 
   const isolatedHome = mkdtempSync(join(tmpdir(), "sakunyan-home-"));
   try {
-    const result = spawnSync(process.execPath, ["dist/cli.js", ".", "--version"], {
+    const result = spawnSync(process.execPath, ["dist/cli.js", "--", ".", "--version"], {
       encoding: "utf8",
       env: { ...process.env, HOME: isolatedHome, USERPROFILE: isolatedHome },
     });
