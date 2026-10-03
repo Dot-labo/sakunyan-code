@@ -25,7 +25,7 @@ test("ヒントの一覧は日本語で、issueの例を収録している", () 
     assert.match(all, pattern);
   }
   // 入力欄の使い方、git・gh、豆知識（仕組み・ネットワーク・歴史・言語）も収録している。
-  for (const pattern of [/「!ls」/, /「!!ls」/, /「@」/, /Tab/, /Ctrl\+A/, /「git status」/, /「gh auth login」/, /2進数/, /DNS/, /ARPANET/, /Python/]) {
+  for (const pattern of [/「!ls」/, /「!!ls」/, /「@」/, /Tab/, /Ctrl\+A/, /「git status」/, /「sakunyan \. --continue」/, /「gh auth login」/, /全選択/, /2進数/, /DNS/, /ARPANET/, /Python/]) {
     assert.match(all, pattern);
   }
 });
@@ -36,8 +36,42 @@ test("ヒントは待ち時間に読み切れる長さで、文として終わ�
     assert.ok(formatTipLines(tip, 80).length <= 3, tip.text);
     assert.match(tip.text, /[。）]$/, tip.text);
   }
-  // Ctrl+A は入力欄では「行の先頭へ移動」。「全選択」とは書かない。
-  assert.doesNotMatch(SAKUNYAN_TIPS.map(({ text }) => text).join("\n"), /全選択/);
+});
+
+test("パソコンのショートカットは、環境に合うキーで出し分け、使える場所を書いている", () => {
+  const ctrlOS = ["Windows", "Chromebook", "Linux"];
+  for (const os of ctrlOS) {
+    const texts = textsFor(os);
+    assert.ok(texts.every((text) => !/Command\+/.test(text)), os);
+    for (const pattern of [/Ctrl\+A で.*全選択/, /Ctrl\+C でコピー、Ctrl\+V で貼り付け/, /Ctrl\+Z/, /Ctrl\+S/, /Ctrl\+F/, /Ctrl\+Shift\+T/, /Alt\+Tab/]) {
+      assert.ok(texts.some((text) => pattern.test(text)), `${os}: ${pattern}`);
+    }
+  }
+  const mac = textsFor("macOS");
+  for (const pattern of [/Command\+A で.*全選択/, /Command\+C でコピー、Command\+V で貼り付け/, /Command\+Z/, /Command\+S/, /Command\+F/, /Command\+Shift\+T/, /Command\+Tab/, /Command\+Shift\+4/]) {
+    assert.ok(mac.some((text) => pattern.test(text)), `macOS: ${pattern}`);
+  }
+  // Mac には、Ctrl 版のアプリのショートカットや Alt+Tab を出さない。
+  assert.ok(mac.every((text) => !/Alt\+Tab|Windows キー|Ctrl\+Shift\+C/.test(text)));
+  assert.ok(mac.every((text) => !/(ブラウザ|メモ帳|エディタ).*Ctrl/.test(text)));
+
+  // 同じ内容の Ctrl 版と Command 版は、キーの名前だけが違う。
+  const swap = (text) => text.replaceAll("Command", "Ctrl");
+  const ctrlTexts = new Set(textsFor("Linux"));
+  const paired = mac.filter((text) => /^(ブラウザ|メモ帳)/.test(text));
+  assert.equal(paired.length, 9);
+  for (const text of paired) assert.ok(ctrlTexts.has(swap(text)), text);
+
+  // 環境が分からないときは、キーが環境で違うヒントを出さない。
+  assert.ok(textsFor(undefined).every((text) => !/全選択|貼り付けができる|Alt\+Tab|スクリーンショット/.test(text)));
+
+  // ターミナルやsakunyanの中では意味が違うキーは、どこでの話かを書く。
+  for (const tip of SAKUNYAN_TIPS) {
+    if (/全選択/.test(tip.text)) assert.match(tip.text, /アプリでは/);
+    if (/行の先頭/.test(tip.text) || /まとめて消せる/.test(tip.text)) assert.match(tip.text, /sakunyan の入力欄では/);
+  }
+  assert.ok(textsFor("Linux").some((text) => /ターミナルの中では、Ctrl\+C はコピーではなく/.test(text)));
+  assert.ok(textsFor("Windows").some((text) => /Windows キー\+Shift\+S/.test(text)));
 });
 
 test("ヒントは環境に合う候補だけから選ぶ", () => {
