@@ -308,8 +308,11 @@ test("APIキー入力後に接続確認を再試行し、入力値を表示す�
         assert.match(instructions, /自分専用のOpenRouterアカウントが必要です/);
         assert.match(instructions, /先生からAPIキーを受け取る/);
         assert.doesNotMatch(instructions, /\n\n|teacher-secret/);
+        assert.match(component.render(80).at(-1), /APIキーを貼り付け（Enterで確定・Escで終了）👉/);
+        assert.match(component.render(40).at(-1), /Enter:確定 Esc:終了 👉/);
         component.handleInput("teacher-secret");
         assert.match(component.render(80).join("\n"), /teacher-secret/);
+        assert.match(component.render(40).at(-1), /teacher-secret/);
         component.handleInput("\n");
         return "teacher-secret";
       },

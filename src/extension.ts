@@ -58,8 +58,7 @@ function requestApiKey(ctx: ExtensionContext): Promise<string | undefined> {
     return {
       render: (width: number) => [
         ...messages.setup.keySources.map((line) => truncateToWidth(theme.fg("text", line), width, "")),
-        truncateToWidth(theme.fg("dim", messages.setup.inputHint), width, ""),
-        truncateToWidth(theme.fg("accent", `${messages.setup.inputPrompt} ${value}`), width, ""),
+        truncateToWidth(theme.fg("accent", `${width < 60 ? messages.setup.inputPromptCompact : messages.setup.inputPrompt} ${value}`), width, ""),
       ],
       handleInput(data: string) {
         if (matchesKey(data, "escape") || matchesKey(data, "ctrl+c")) {
