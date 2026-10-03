@@ -8,6 +8,7 @@ import { getDefaultMode, SAKUNYAN_MODES, type SakunyanMode } from "./modes.js";
 import { fetchLatestSakunyanVersion, isUpdateAvailable } from "./update-check.js";
 import { SAKUNYAN_VERSION } from "./version.js";
 import { formatRuntimeOS, getRuntimeOS } from "./runtime-os.js";
+import { formatTipLines, getTipOS, selectTip } from "./tips.js";
 import {
   fetchKeyStatus,
   KEY_STATUS_BAR_WIDTH,
@@ -309,6 +310,10 @@ async function checkForUpdate(ctx: ExtensionContext): Promise<void> {
   }
 }
 
+// ヒントは起動ごとに1件だけ選び、画面のヘッダーにだけ表示する（system promptには入れない）。
+// /new や /resume でセッションが切り替わっても、同じ起動の中では同じヒントのままにする。
+const startupTip = selectTip(getTipOS());
+
 export function sakunyanExtension(pi: ExtensionAPI): void {
   let currentMode = getDefaultMode();
   const runtimeOS = getRuntimeOS();
@@ -360,13 +365,18 @@ export function sakunyanExtension(pi: ExtensionAPI): void {
     activity = { color: "success", icon: messages.ui.idleIcon, text: messages.ui.waiting };
 
     ctx.ui.setHeader((_tui, theme) => ({
-      render: () => [
-        ...messages.ui.logo.map((line: string) => theme.fg("accent", line)),
-        theme.fg("success", theme.bold(messages.ui.header)),
-        `${theme.fg("muted", messages.ui.workingDirectory)} ${theme.fg("accent", `📁 ${ctx.cwd}`)}`,
-        `${theme.fg("muted", messages.ui.runtimeOS)} ${theme.fg("accent", formatRuntimeOS(runtimeOS))}`,
-        "",
-      ],
+      // 幅を超える行があるとTUIが異常終了するため、ロゴなどは幅で切り詰め、ヒントは折り返す。
+      render: (width?: number) => {
+        const fit = (line: string) => (width !== undefined && width > 0 ? truncateToWidth(line, width, "") : line);
+        return [
+          ...messages.ui.logo.map((line: string) => fit(theme.fg("accent", line))),
+          fit(theme.fg("success", theme.bold(messages.ui.header))),
+          fit(`${theme.fg("muted", messages.ui.workingDirectory)} ${theme.fg("accent", `📁 ${ctx.cwd}`)}`),
+          fit(`${theme.fg("muted", messages.ui.runtimeOS)} ${theme.fg("accent", formatRuntimeOS(runtimeOS))}`),
+          ...formatTipLines(startupTip, width).map((line) => theme.fg("muted", line)),
+          "",
+        ];
+      },
       invalidate() {},
     }));
     void checkForUpdate(ctx);
