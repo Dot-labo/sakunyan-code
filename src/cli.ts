@@ -4,10 +4,12 @@ import "./agent-dir.js";
 import { statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
+import { parseCliArgs } from "./cli-args.js";
 import { messages } from "./messages.js";
 import { MODEL_ARGS } from "./model-config.js";
 import { getDefaultMode } from "./modes.js";
 import { MIN_NODE_VERSION, supportsNodeVersion } from "./node-version.js";
+import { SAKUNYAN_VERSION } from "./version.js";
 
 process.env.PI_CODING_AGENT = "true";
 process.env.AI_AGENT = "pi";
@@ -22,7 +24,26 @@ if (!supportsNodeVersion(process.versions.node)) {
 }
 
 async function run(): Promise<void> {
-  const [inputPath, ...args] = process.argv.slice(2);
+  const command = parseCliArgs(process.argv.slice(2));
+
+  if (command.kind === "version") {
+    process.stdout.write(`${SAKUNYAN_VERSION}\n`);
+    return;
+  }
+
+  if (command.kind === "help") {
+    const useStdoutColor = Boolean(process.stdout.isTTY && !("NO_COLOR" in process.env) && process.env.TERM !== "dumb");
+    process.stdout.write(messages.help(useStdoutColor));
+    return;
+  }
+
+  if (command.kind === "unknownOption") {
+    process.stderr.write(messages.unknownOption(command.option, useColor));
+    process.exitCode = 2;
+    return;
+  }
+
+  const { inputPath, piArgs: args } = command;
 
   if (!inputPath) {
     process.stderr.write(messages.targetRequired(process.cwd(), useColor));

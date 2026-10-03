@@ -64,6 +64,35 @@ Node.jsを更新してから、もう一度実行してください：
 更新できたか確認するコマンド：
   ${paint("33", "node --version", color)}
 `,
+  help: (color = false) => `${paint("1;32", `sakunyan code (v${SAKUNYAN_VERSION})`, color)}
+
+初心者向けの日本語コーディングアドバイザーだよ。
+
+${paint("36", "使い方：", color)}
+  ${paint("33", "sakunyan [オプション] <作業フォルダのパス>", color)}
+
+${paint("36", "作業フォルダの指定例：", color)}
+  ${paint("33", "sakunyan .", color)}                  今いるフォルダで作業する
+  ${paint("33", "sakunyan ./my-project", color)}       今いるフォルダの中のフォルダで作業する
+  ${paint("33", "sakunyan ~/my-project", color)}       ホームフォルダの中のフォルダで作業する
+  ${paint("33", 'sakunyan "./my project"', color)}     スペースを含むパスは " " で囲む
+  ${paint("33", "sakunyan -- -my-project", color)}     「-」で始まるフォルダ名は -- の後ろに書く
+
+${paint("36", "オプション：", color)}
+  ${paint("33", "-v, --version", color)}    sakunyanのバージョンを表示して終了する
+  ${paint("33", "-h, --help", color)}       この使い方を表示して終了する
+  ${paint("33", "--", color)}               これより後ろはオプションとして扱わない
+
+作業フォルダより後ろに書いた引数は、sakunyanが内部で使うpiへそのまま渡します（ふだんは使いません）。
+`,
+  unknownOption: (option: string, color = false) => `${paint("1;31", `❌ 「${option}」というオプションはないよ。`, color)}
+
+${paint("36", "使えるオプションを確認する：", color)}
+  ${paint("33", "sakunyan --help", color)}
+
+「-」で始まる名前のフォルダで作業する場合は、-- の後ろに書いてね：
+  ${paint("33", `sakunyan -- ${option}`, color)}
+`,
   targetRequired: (currentDirectory: string, color = false) => `${paint("1;32", messages.ui.header, color)}
 
 ${paint("36", "今いるフォルダはここだよ：", color)}
