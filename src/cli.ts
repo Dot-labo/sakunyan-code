@@ -81,12 +81,9 @@ async function run(): Promise<void> {
     if (showStartup) process.stderr.write("🐾 さくにゃんを起動中…\n");
 
     try {
-      const [{ main }, { sakunyanExtension }] = await Promise.all([
-        import("@earendil-works/pi-coding-agent"),
-        import("./extension.js"),
-      ]);
+      const { runSakunyan } = await import("./runtime.js");
       if (showStartup) process.stderr.write("🐾 設定と画面を準備中…\n");
-      await main(
+      await runSakunyan(
         [
           ...args,
           ...MODEL_ARGS,
@@ -98,9 +95,6 @@ async function run(): Promise<void> {
           "--tools",
           getDefaultMode().tools.join(","),
         ],
-        {
-          extensionFactories: [{ name: "sakunyan", factory: sakunyanExtension, hidden: true }],
-        },
       );
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);

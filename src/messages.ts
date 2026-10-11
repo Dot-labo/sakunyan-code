@@ -30,6 +30,7 @@ export const messages = {
     modeNotice: "注意",
     modeInputHint: "↑↓ 選択　Enterで決定　Escでキャンセル",
     modeChanged: (name: string) => `応答モードを「${name}」に変更しました。`,
+    projectSettingsDisabled: "フォルダごとの設定は使わないので、この操作は必要ないよ。",
   },
   footer: {
     expiryIcon: "🔑",
