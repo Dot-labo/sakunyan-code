@@ -238,9 +238,9 @@ function showKeyStatusMessage(ctx: ExtensionContext, status: FooterState): void 
   );
 }
 
-const keyStatusRefreshers = new WeakMap<ExtensionContext, () => void>();
+type KeyStatusDisplay = { refresh: () => void; dispose: () => void };
 
-function installKeyStatusDisplay(ctx: ExtensionContext): () => void {
+function installKeyStatusDisplay(ctx: ExtensionContext): KeyStatusDisplay {
   let state: FooterState = { kind: "loading" };
   let disposed = false;
   let inFlight: Promise<void> | undefined;
@@ -259,12 +259,17 @@ function installKeyStatusDisplay(ctx: ExtensionContext): () => void {
       } catch {
         // 認証情報の取得失敗は、フッターの取得失敗として扱う。
       }
+      // 認証情報を待っている間に終了した場合は、取得も始めない。
+      if (disposed) return;
       const nextState = await fetchKeyStatus(apiKey);
       if (!disposed) {
         state = nextState;
         showKeyStatusMessage(ctx, state);
       }
-    })().finally(() => {
+    })().catch(() => {
+      // 無効になったctxや表示先のエラーを、未処理のPromiseにしない。
+      dispose();
+    }).finally(() => {
       inFlight = undefined;
     });
     return inFlight;
@@ -278,7 +283,7 @@ function installKeyStatusDisplay(ctx: ExtensionContext): () => void {
   const refreshTimer = setInterval(() => void refresh(), KEY_STATUS_REFRESH_INTERVAL_MS);
   refreshTimer.unref();
   void refresh(true);
-  return () => void refresh();
+  return { refresh: () => void refresh(), dispose };
 }
 
 function updateNoticeWidget(latestVersion: string) {
@@ -317,6 +322,8 @@ const startupTip = selectTip(getTipOS());
 
 export function sakunyanExtension(pi: ExtensionAPI): void {
   let currentMode = getDefaultMode();
+  // ctxはイベントごとに別オブジェクトなので、表示の寿命は拡張のセッションで管理する。
+  let keyStatusDisplay: KeyStatusDisplay | undefined;
   const runtimeOS = getRuntimeOS();
   let activity: {
     color: "accent" | "success";
@@ -361,6 +368,8 @@ export function sakunyanExtension(pi: ExtensionAPI): void {
   }));
 
   pi.on("session_start", async (event, ctx) => {
+    keyStatusDisplay?.dispose();
+    keyStatusDisplay = undefined;
     if (ctx.mode !== "tui") return;
     const tip = event.reason === "startup" ? startupTip : undefined;
 
@@ -387,10 +396,15 @@ export function sakunyanExtension(pi: ExtensionAPI): void {
     }));
     void checkForUpdate(ctx);
     if (await setupModel(ctx)) {
-      keyStatusRefreshers.set(ctx, installKeyStatusDisplay(ctx));
+      keyStatusDisplay = installKeyStatusDisplay(ctx);
       renderStatus(ctx);
       ctx.ui.setWorkingMessage(messages.ui.thinking);
     }
+  });
+
+  pi.on("session_shutdown", () => {
+    keyStatusDisplay?.dispose();
+    keyStatusDisplay = undefined;
   });
 
   pi.on("turn_start", (_event, ctx) => {
@@ -414,7 +428,7 @@ export function sakunyanExtension(pi: ExtensionAPI): void {
 
   pi.on("turn_end", (_event, ctx) => {
     if (ctx.mode !== "tui") return;
-    keyStatusRefreshers.get(ctx)?.();
+    keyStatusDisplay?.refresh();
     showStatus(ctx, "success", messages.ui.idleIcon, messages.ui.waiting);
     ctx.ui.setWorkingMessage(messages.ui.thinking);
   });

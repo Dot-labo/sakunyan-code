@@ -78,6 +78,7 @@ test("対象フォルダを必須にする", async () => {
   assert.deepEqual([...handlers.keys()], [
     "before_agent_start",
     "session_start",
+    "session_shutdown",
     "turn_start",
     "tool_call",
     "tool_result",
