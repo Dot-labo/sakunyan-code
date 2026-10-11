@@ -6,6 +6,7 @@ import { messages } from "./messages.js";
 import { MODEL_ID, MODEL_PROVIDER } from "./model-config.js";
 import { getDefaultMode, SAKUNYAN_MODES, type SakunyanMode } from "./modes.js";
 import { CLASSROOM_RULES_PROMPT } from "./classroom-rules.js";
+import { canReachServer } from "./network-check.js";
 import { fetchLatestSakunyanVersion, isUpdateAvailable } from "./update-check.js";
 import { SAKUNYAN_VERSION } from "./version.js";
 import { formatRuntimeOS, getRuntimeOS } from "./runtime-os.js";
@@ -26,6 +27,25 @@ const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "
 function showSetupMessage(ctx: ExtensionContext, message: string, color: "accent" | "success" | "error" = "accent") {
   const text = ctx.ui.theme.fg(color, message);
   ctx.ui.setWidget("sakunyan-setup", [text], { placement: "aboveEditor" });
+}
+
+// 接続確認に失敗したとき、APIキーの問題か、インターネットの問題かを分けて知らせる。
+// サーバーまで通信が届かないときは、APIキーを入れ直しても直らないので、次にやることを出す。
+async function showProbeFailure(ctx: ExtensionContext): Promise<void> {
+  const headline = `${messages.setup.checkingNg}　${messages.setup.requestKey}`;
+  const serverUrl = ctx.modelRegistry.find(MODEL_PROVIDER, MODEL_ID)?.baseUrl;
+  if (await canReachServer(serverUrl)) {
+    showSetupMessage(ctx, headline, "error");
+    return;
+  }
+  ctx.ui.setWidget(
+    "sakunyan-setup",
+    [
+      ctx.ui.theme.fg("error", `${messages.setup.checkingNg}　${messages.setup.networkUnreachable}`),
+      ...messages.setup.networkNextSteps.map((line) => ctx.ui.theme.fg("warning", line)),
+    ],
+    { placement: "aboveEditor" },
+  );
 }
 
 async function canUseModel(ctx: ExtensionContext): Promise<boolean> {
@@ -146,7 +166,7 @@ async function setupModel(ctx: ExtensionContext): Promise<boolean> {
     return true;
   }
 
-  showSetupMessage(ctx, `${messages.setup.checkingNg}　${messages.setup.requestKey}`, "error");
+  await showProbeFailure(ctx);
   ctx.ui.setWorkingMessage(messages.setup.requestKey);
 
   while (true) {
@@ -172,7 +192,7 @@ async function setupModel(ctx: ExtensionContext): Promise<boolean> {
       showSetupMessage(ctx, messages.setup.checkingOk, "success");
       return true;
     }
-    showSetupMessage(ctx, `${messages.setup.checkingNg}　${messages.setup.requestKey}`, "error");
+    await showProbeFailure(ctx);
     ctx.ui.setWorkingMessage(messages.setup.invalidKey);
     ctx.ui.notify(messages.setup.invalidKey, "warning");
   }

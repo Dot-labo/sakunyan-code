@@ -6,8 +6,9 @@ import { test } from "node:test";
 import { dirname, join } from "node:path";
 import { homedir, tmpdir } from "node:os";
 import { sakunyanExtension, saveApiKey } from "../dist/extension.js";
-import { messages } from "../dist/messages.js";
+import { installCommand, messages } from "../dist/messages.js";
 import { MODEL_ARGS, MODEL_ID, MODEL_PROVIDER, MODEL_REFERENCE } from "../dist/model-config.js";
+import { canReachServer } from "../dist/network-check.js";
 import { DEFAULT_MODE_ID, getDefaultMode, SAKUNYAN_MODES } from "../dist/modes.js";
 import { supportsNodeVersion } from "../dist/node-version.js";
 import { detectRuntimeOS, formatRuntimeOS, getRuntimeOS } from "../dist/runtime-os.js";
@@ -349,9 +350,8 @@ test("APIキー入力後に接続確認を再試行し、入力値を表示す�
   const previousAgentDirectory = process.env.PI_CODING_AGENT_DIR;
   process.env.PI_CODING_AGENT_DIR = authDirectory;
   const previousFetch = globalThis.fetch;
-  globalThis.fetch = async () => {
-    throw new Error("offline");
-  };
+  // サーバーまでは届く（返事は来る）が、APIキーが無い状態。
+  globalThis.fetch = async () => ({ ok: false, status: 401, json: async () => ({}) });
 
   try {
   const handlers = new Map();
@@ -419,6 +419,7 @@ test("APIキー入力後に接続確認を再試行し、入力値を表示す�
   assert.ok(widgets.some((status) => status.includes("接続を確認中")));
   assert.ok(widgets.some((status) => status.includes("接続確認NG　OpenRouter APIキーが必要です。")));
   assert.ok(widgets.some((status) => status.includes("接続確認OK")));
+  assert.ok(!widgets.some((status) => status.includes("インターネットにつながらない")));
   } finally {
     if (previousAgentDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;
     else process.env.PI_CODING_AGENT_DIR = previousAgentDirectory;
@@ -574,4 +575,119 @@ test("APIキー未設定でも更新確認を始め、新しいバージョン�
   } finally {
     globalThis.fetch = previousFetch;
   }
+});
+
+test("サーバーまで通信が届くかどうかを、返事の有無だけで判定する", async () => {
+  const calls = [];
+  const answered = async (url, init) => {
+    calls.push({ url, init });
+    return { ok: false, status: 401 };
+  };
+  assert.equal(await canReachServer("http://127.0.0.1:18080/v1", answered), true);
+  assert.equal(calls[0].url, "http://127.0.0.1:18080/v1");
+  assert.equal(calls[0].init.method, "GET");
+  // APIキーなどのヘッダーは送らない。
+  assert.equal(calls[0].init.headers, undefined);
+
+  assert.equal(await canReachServer(undefined, answered), true);
+  assert.equal(calls[1].url, "https://openrouter.ai/api/v1");
+  assert.equal(await canReachServer("  ", answered), true);
+  assert.equal(calls[2].url, "https://openrouter.ai/api/v1");
+
+  const offline = async () => {
+    throw new TypeError("fetch failed");
+  };
+  assert.equal(await canReachServer("https://openrouter.ai/api/v1", offline), false);
+
+  const never = (_url, init) => new Promise((_resolve, reject) => {
+    init.signal.addEventListener("abort", () => reject(init.signal.reason));
+  });
+  assert.equal(await canReachServer("https://openrouter.ai/api/v1", never, 20), false);
+});
+
+test("インターネットにつながらないときは、APIキーではなくネットワークの確認を案内する", async () => {
+  const previousFetch = globalThis.fetch;
+  const requested = [];
+  globalThis.fetch = async (url) => {
+    requested.push(String(url));
+    throw new TypeError("fetch failed");
+  };
+
+  try {
+    const handlers = new Map();
+    sakunyanExtension({
+      on: (event, handler) => handlers.set(event, handler),
+      registerCommand() {},
+      setActiveTools() {},
+    });
+    const widgets = [];
+    const notices = [];
+    let shutdowns = 0;
+    const theme = { fg: (_color, text) => text, bold: (text) => text };
+    await handlers.get("session_start")({}, {
+      mode: "tui",
+      hasUI: true,
+      cwd: "/project",
+      isIdle: () => true,
+      modelRegistry: {
+        find: () => ({ baseUrl: "http://127.0.0.1:9/v1" }),
+        getApiKeyForProvider: async () => undefined,
+        complete: async () => ({ stopReason: "error", errorMessage: "Connection error." }),
+      },
+      ui: {
+        theme,
+        setHeader() {},
+        setFooter() {},
+        setStatus() {},
+        setWidget: (key, lines) => {
+          if (key === "sakunyan-setup") widgets.push(lines);
+        },
+        setWorkingMessage() {},
+        notify: (text) => notices.push(text),
+        // 生徒がEscで終了する。
+        custom: async () => undefined,
+      },
+      shutdown() {
+        shutdowns += 1;
+      },
+    });
+
+    assert.ok(requested.includes("http://127.0.0.1:9/v1"));
+    const failure = widgets.at(-1);
+    assert.match(failure[0], /接続確認NG　インターネットにつながらないみたい。/);
+    assert.doesNotMatch(failure.join("\n"), /APIキーが必要です/);
+    assert.match(failure.join("\n"), /Wi-Fi/);
+    assert.match(failure.join("\n"), /先生に聞いてね/);
+    assert.match(failure.join("\n"), /もう一度 sakunyan を起動/);
+    assert.deepEqual(failure.slice(1), messages.setup.networkNextSteps);
+    assert.deepEqual(notices, [messages.setup.cancelled]);
+    assert.equal(shutdowns, 1);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test("起動に失敗したときと、Node.jsが古いときは、次にやることを表示する", () => {
+  const failed = messages.startupFailed("Cannot find package 'x'");
+  assert.match(failed, /sakunyanを起動できませんでした/);
+  assert.match(failed, /開き直してから、もう一度起動する/);
+  assert.ok(failed.includes(installCommand()));
+
+  // WindowsのPowerShellでは「npm」が実行ポリシーで止まることがあるので、設定を変えずに動く npm.cmd を案内する。
+  assert.equal(installCommand("win32"), "npm.cmd install -g @dotlabo/sakunyan-code@latest");
+  assert.equal(installCommand("darwin"), "npm install -g @dotlabo/sakunyan-code@latest");
+  assert.equal(installCommand("linux"), "npm install -g @dotlabo/sakunyan-code@latest");
+  assert.equal(messages.update.command, installCommand());
+  assert.match(failed, /先生に見せる/);
+  assert.match(failed, /エラーの内容：\nCannot find package 'x'\n$/);
+  assert.doesNotMatch(failed, /\x1b\[/);
+  assert.match(messages.startupFailed("x", true), /\x1b\[/);
+
+  const oldNode = messages.unsupportedNodeVersion("20.11.0", "22.19.0");
+  assert.match(oldNode, /現在のバージョン： v20\.11\.0/);
+  assert.match(oldNode, /必要なバージョン： v22\.19\.0 以上/);
+  assert.match(oldNode, /https:\/\/nodejs\.org\/ja\/download/);
+  assert.match(oldNode, /ターミナル（PowerShellなど）をいちど閉じて、開き直してください/);
+  assert.equal(supportsNodeVersion("20.11.0"), false);
+  assert.equal(supportsNodeVersion("18.20.8"), false);
 });
