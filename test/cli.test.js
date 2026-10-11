@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { test } from "node:test";
 import { dirname, join } from "node:path";
@@ -142,8 +143,8 @@ test("応答モードを選択し、次のターンへプロンプトを適用�
   assert.equal(getDefaultMode().id, DEFAULT_MODE_ID);
   assert.match(getDefaultMode().name, /[ぁ-んァ-ヶ一-龠]/);
 
-  const sampleMode = SAKUNYAN_MODES.find(({ id }) => id === "osaka-dialect-sample");
-  assert.ok(sampleMode);
+  const tutorMode = SAKUNYAN_MODES.find(({ id }) => id === "tutor");
+  assert.ok(tutorMode);
   const handlers = new Map();
   const commands = new Map();
   const appliedTools = [];
@@ -185,8 +186,8 @@ test("応答モードを選択し、次のターンへプロンプトを適用�
         const component = factory({ requestRender: () => renders++ }, theme, {}, (value) => (result = value));
         assert.match(component.render(80).join("\n"), /アドバイスモード/);
         component.handleInput("\u001b[B");
-        assert.match(component.render(80).join("\n"), /親しみやすい大阪弁/);
-        assert.match(component.render(80).join("\n"), /動作確認用です/);
+        assert.match(component.render(80).join("\n"), /ヒントを少しずつ出します/);
+        assert.match(component.render(80).join("\n"), /すぐに答えを出さないことがあります/);
         component.handleInput("\u001b[A");
         assert.match(component.render(80).join("\n"), /一緒に調べながら/);
         component.handleInput("\u001b[B");
@@ -197,13 +198,13 @@ test("応答モードを選択し、次のターンへプロンプトを適用�
   };
 
   await commands.get("mode").handler("", context);
-  assert.deepEqual(appliedTools, [sampleMode.tools]);
+  assert.deepEqual(appliedTools, [tutorMode.tools]);
   assert.equal(renders, 3);
-  assert.deepEqual(notifications, [messages.ui.modeChanged(sampleMode.name)]);
-  assert.match(statuses.at(-1), /大阪弁モード/);
+  assert.deepEqual(notifications, [messages.ui.modeChanged(tutorMode.name)]);
+  assert.match(statuses.at(-1), /チューターモード/);
 
   const applied = await handlers.get("before_agent_start")({ systemPrompt: "BASE_PROMPT" }, context);
-  assert.ok(applied.systemPrompt.startsWith(`BASE_PROMPT\n\n${sampleMode.prompt}\n\n`));
+  assert.ok(applied.systemPrompt.startsWith(`BASE_PROMPT\n\n${tutorMode.prompt}\n\n`));
   assert.match(applied.systemPrompt, new RegExp(`利用者の実行環境は${getRuntimeOS()}です`));
   assert.strictEqual(context.model, model);
   assert.strictEqual(context.sessionManager, sessionManager);
@@ -211,15 +212,15 @@ test("応答モードを選択し、次のターンへプロンプトを適用�
   assert.strictEqual(context.permissions, permissions);
 
   handlers.get("turn_start")({}, context);
-  assert.match(statuses.at(-1), /考え中….*大阪弁モード/);
+  assert.match(statuses.at(-1), /考え中….*チューターモード/);
   handlers.get("tool_call")({ toolName: "read" }, context);
-  assert.match(statuses.at(-1), /ファイルを確認中….*大阪弁モード/);
+  assert.match(statuses.at(-1), /ファイルを確認中….*チューターモード/);
   handlers.get("tool_call")({ toolName: "bash" }, context);
-  assert.match(statuses.at(-1), /コマンドを実行中….*大阪弁モード/);
+  assert.match(statuses.at(-1), /コマンドを実行中….*チューターモード/);
   handlers.get("tool_result")({}, context);
-  assert.match(statuses.at(-1), /考え中….*大阪弁モード/);
+  assert.match(statuses.at(-1), /考え中….*チューターモード/);
   handlers.get("turn_end")({}, context);
-  assert.match(statuses.at(-1), /質問を入力してね.*大阪弁モード/);
+  assert.match(statuses.at(-1), /質問を入力してね.*チューターモード/);
 
   context.ui.custom = async (factory) => {
     let result;
@@ -250,6 +251,97 @@ test("応答モードを選択し、次のターンへプロンプトを適用�
   assert.match(afterRestart.systemPrompt, new RegExp(`利用者の実行環境は${getRuntimeOS()}です`));
   assert.ok(afterRestart.systemPrompt.includes(getDefaultMode().prompt));
   assert.match(statuses.at(-1), /アドバイスモード/);
+});
+
+test("チューターモードは読み取りだけで、手がかりを4段で出す指示を持つ", () => {
+  // 選べるモードは、アドバイスとチューターの2つだけ。
+  assert.deepEqual(SAKUNYAN_MODES.map(({ id }) => id), ["advisor", "tutor"]);
+  assert.deepEqual(SAKUNYAN_MODES.map(({ name }) => name), ["アドバイスモード", "チューターモード"]);
+  assert.equal(DEFAULT_MODE_ID, "advisor");
+
+  const tutor = SAKUNYAN_MODES.find(({ id }) => id === "tutor");
+  const advisor = SAKUNYAN_MODES.find(({ id }) => id === "advisor");
+  // 使えるツールは、アドバイスモードと同じ読み取りだけ。
+  assert.deepEqual([...tutor.tools], ["read", "grep", "find", "ls"]);
+  assert.deepEqual([...tutor.tools], [...advisor.tools]);
+  assert.equal(tutor.description, "自分で考えて作れるように、ヒントを少しずつ出します。");
+  assert.equal(tutor.notice, "すぐに答えを出さないことがあります。ファイルの変更などは行いません。");
+
+  // 指示文の要点。
+  for (const pattern of [
+    /困りごとが「いま学んでいること」か「じゃまな物」かを分ける/,
+    /じゃまな物\(タイプミス、インストール、パス、道具の使い方\)は、すぐに場所と直し方を教える。問い返さない/,
+    /手がかりを次の4段で少しずつ出す/,
+    /1段: 問い返す、または次の小さな一歩を示す/,
+    /2段: 考え方と、題材のちがう短い例を見せる/,
+    /3段: ユーザーの課題のコードを、大事な所を ____ にした穴埋めで見せる/,
+    /4段: 答えと、行ごとの短い説明を見せる。最後に、少し変えた課題を1つ出す/,
+    /同じ段のヒントをくり返さない/,
+    /すぐに3段か4段へ進む/,
+    /「答えを教えて」と言われたとき: すでに自分で試していれば4段を出す。まだ試していなければ、1回だけ3段を出して/,
+    /理解を1問で確かめる/,
+    /プログラムを書くのも、コマンドを実行するのもユーザー/,
+    /4段より前に、課題の完成したコードを見せること/,
+    /ファイルを作成・変更・削除すること、コマンドを自分で実行すること/,
+    /答えを出さずに、質問だけを何度も続けること/,
+  ]) assert.match(tutor.prompt, pattern);
+});
+
+test("アドバイスモードの定義は変わらず、大阪弁モードは選べない", async () => {
+  const advisor = getDefaultMode();
+  assert.equal(advisor.id, "advisor");
+  assert.equal(advisor.name, "アドバイスモード");
+  assert.equal(advisor.description, "一緒に調べながら、考え方や手順を分かりやすく説明します。");
+  assert.equal(advisor.notice, "ファイルの変更などは行わず、必要な操作は自分で実行できるように案内します。");
+  assert.deepEqual([...advisor.tools], ["read", "grep", "find", "ls"]);
+  // 指示文は、チューターモードを足す前（0.1.17）と1文字も変わらない。
+  assert.equal(
+    createHash("sha256").update(advisor.prompt).digest("hex"),
+    "7b6b38ce4c5e929c6283054c8640bcd192b1e0031def46864197af1d703d73a9",
+  );
+  assert.match(advisor.prompt, /^あなたは sakunyanという名前のプログラミング教育アドバイザーです。/);
+  assert.match(advisor.prompt, /必要に応じて、コマンドや変更例を提案する/);
+
+  // モードの定義にも、選択画面にも、大阪弁モードは出ない。
+  for (const mode of SAKUNYAN_MODES) {
+    assert.doesNotMatch([mode.id, mode.name, mode.description, mode.notice, mode.prompt].join("\n"), /大阪弁|osaka/i);
+  }
+  const commands = new Map();
+  sakunyanExtension({
+    on() {},
+    registerCommand: (name, command) => commands.set(name, command),
+    setActiveTools() {},
+  });
+  const theme = { fg: (_color, text) => text, bold: (text) => text };
+  const screens = [];
+  await commands.get("mode").handler("", {
+    mode: "tui",
+    ui: {
+      theme,
+      setStatus() {},
+      notify() {},
+      custom: async (factory) => {
+        let result;
+        const component = factory({ requestRender() {} }, theme, {}, (value) => (result = value));
+        // 下矢印でひとまわりして、全ての候補の説明と注意点を見る。
+        for (let index = 0; index <= SAKUNYAN_MODES.length; index++) {
+          screens.push(component.render(80).join("\n"));
+          component.handleInput("\u001b[B");
+        }
+        component.handleInput("\u001b");
+        return result;
+      },
+    },
+  });
+  assert.equal(screens.length, 3);
+  assert.equal(screens[0], screens[2]);
+  for (const screen of screens) {
+    assert.doesNotMatch(screen, /大阪弁|サンプル|動作確認用/);
+    // 候補は2行だけ。
+    assert.equal(screen.split("\n").filter((line) => /^[→ ] .+モード$/.test(line)).length, 2);
+  }
+  assert.match(screens[0], /→ アドバイスモード\n  チューターモード/);
+  assert.match(screens[1], /  アドバイスモード\n→ チューターモード/);
 });
 
 test("APIキー入力後に接続確認を再試行し、入力値を表示する", async () => {
