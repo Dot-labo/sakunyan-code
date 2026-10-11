@@ -46,7 +46,7 @@ test("対象フォルダを必須にする", async () => {
   assert.equal(unknown.status, 1);
   assert.match(unknown.stderr, /「missing-folder」フォルダが見つからなかったよ/);
   assert.match(unknown.stderr, /今いるフォルダ/);
-  assert.match(unknown.stderr, /sakunyan-code\/missing-folder/);
+  assert.ok(unknown.stderr.includes(join(process.cwd(), "missing-folder")));
   assert.match(unknown.stderr, /📖 パスの見方/);
   assert.match(unknown.stderr, new RegExp(dirname(process.cwd()).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.match(unknown.stderr, /\.\.\/<フォルダ名>/);
