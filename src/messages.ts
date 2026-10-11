@@ -3,6 +3,16 @@ import { SAKUNYAN_LOGO, SAKUNYAN_VERSION } from "./version.js";
 const paint = (code: string, text: string, color: boolean) =>
   color ? `\x1b[${code}m${text}\x1b[0m` : text;
 
+/**
+ * sakunyanを入れる・更新するときのコマンド。
+ *
+ * WindowsのPowerShellで「npm」と打つと npm.ps1 が選ばれ、パソコンの設定（実行ポリシー）によっては
+ * 「スクリプトの実行が無効」と出て止まる。「npm.cmd」は、PowerShellでもコマンドプロンプトでも、設定を変えずに動く。
+ */
+export function installCommand(platform: string = process.platform): string {
+  return `${platform === "win32" ? "npm.cmd" : "npm"} install -g @dotlabo/sakunyan-code@latest`;
+}
+
 export const messages = {
   ui: {
     logo: SAKUNYAN_LOGO,
@@ -33,6 +43,12 @@ export const messages = {
     checkingOk: "接続確認OK",
     checkingNg: "接続確認NG",
     requestKey: "OpenRouter APIキーが必要です。",
+    networkUnreachable: "インターネットにつながらないみたい。",
+    networkNextSteps: [
+      "・Wi-Fi（インターネット）につながっているか確認してね。",
+      "・学校や会社のネットワークでは、通信が止められていることがあるよ。先生に聞いてね。",
+      "・つながったら、Escで終了して、もう一度 sakunyan を起動してね。",
+    ],
     keySources: [
       "APIキーの取得方法",
       "1. ポータルサイトから：https://portal.dot-labo.jp/home/openrouter-key",
@@ -51,7 +67,7 @@ export const messages = {
     versionLine: (current: string, latest: string): string =>
       `🐈 今のバージョン v${current} → 新しいバージョン v${latest}`,
     instruction: "終了してから、ターミナルで次のコマンドを実行してね：",
-    command: "npm install -g @dotlabo/sakunyan-code@latest",
+    command: installCommand(),
   },
   unsupportedNodeVersion: (current: string, required: string, color = false) => `${paint("1;31", "❌ Node.jsのバージョンが古いため、sakunyanを起動できません。", color)}
 
@@ -61,8 +77,21 @@ export const messages = {
 Node.jsを更新してから、もう一度実行してください：
   ${paint("36", "https://nodejs.org/ja/download", color)}
 
+更新したあとは、ターミナル（PowerShellなど）をいちど閉じて、開き直してください。
+
 更新できたか確認するコマンド：
   ${paint("33", "node --version", color)}
+`,
+  startupFailed: (detail: string, color = false) => `${paint("1;31", "❌ sakunyanを起動できませんでした。", color)}
+
+次の順に試してください：
+  1. ターミナルをいちど閉じて、開き直してから、もう一度起動する
+  2. sakunyanを入れ直す
+       ${paint("33", installCommand(), color)}
+  3. 直らないときは、下の「エラーの内容」を先生に見せる
+
+エラーの内容：
+${detail}
 `,
   help: (color = false) => `${paint("1;32", `sakunyan code (v${SAKUNYAN_VERSION})`, color)}
 

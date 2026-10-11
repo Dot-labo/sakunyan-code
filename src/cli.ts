@@ -104,7 +104,7 @@ async function run(): Promise<void> {
       );
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      process.stderr.write(`❌ 起動できませんでした。再インストールしても直らない場合は、表示されたエラーを先生に伝えてください。\n${detail}\n`);
+      process.stderr.write(messages.startupFailed(detail, useColor));
       process.exitCode = 1;
     }
   } else if (process.exitCode === undefined) {
