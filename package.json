@@ -1,6 +1,10 @@
 {
   "name": "@dotlabo/sakunyan-code",
-  "version": "0.1.20",
+  "version": "0.1.21",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Dot-labo/sakunyan-code.git"
+  },
   "description": "初心者向けのコーディングエージェント",
   "type": "module",
   "bin": {
