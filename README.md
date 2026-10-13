@@ -432,3 +432,4 @@ sakunyan --version
 
 - [くわしい説明](docs/details.md): オプション、保存される場所、答え方のモード、起動時のヒント、教室共通のルール、安全についての注意、開発する人向けの情報
 - [起動とインストールの待ち時間](docs/performance.md)
+- [npm 自動公開（メンテナー向け）](docs/npm-publishing.md): 初回の trusted publisher 設定と、PR でのバージョン更新
