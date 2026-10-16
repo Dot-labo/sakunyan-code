@@ -12,6 +12,16 @@ import { SAKUNYAN_VERSION } from "./version.js";
 import { formatRuntimeOS, getRuntimeOS } from "./runtime-os.js";
 import { formatTipLines, getTipOS, selectTip } from "./tips.js";
 import {
+  formatMemoryPrompt,
+  getMemoryPath,
+  getSessionsDir,
+  readMemory,
+  runMemoryMaintenance,
+  SUMMARY_SYSTEM_PROMPT,
+  type Generate,
+} from "./memory.js";
+import { FOLD_SYSTEM_PROMPT } from "./semantic-memory.js";
+import {
   fetchKeyStatus,
   KEY_STATUS_BAR_WIDTH,
   KEY_STATUS_REFRESH_INTERVAL_MS,
@@ -336,6 +346,33 @@ async function checkForUpdate(ctx: ExtensionContext): Promise<void> {
   }
 }
 
+const memoryRequestTimeoutMs = 60_000;
+
+// 記憶の処理に使うモデルは、呼び出す前に値として取り出しておく（終了後の古いctxを使わないため）。
+function createGenerator(ctx: ExtensionContext, systemPrompt: string): Generate | undefined {
+  const model = ctx.model;
+  const modelRegistry = ctx.modelRegistry;
+  if (!model) return undefined;
+  return async (input) => {
+    const response = await modelRegistry.complete(model, {
+      systemPrompt,
+      messages: [{ role: "user", content: [{ type: "text", text: input }], timestamp: Date.now() }],
+    }, { signal: AbortSignal.timeout(memoryRequestTimeoutMs) });
+    if (response.stopReason === "error" || response.stopReason === "aborted") return undefined;
+    const text = response.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n").trim();
+    return text || undefined;
+  };
+}
+
+// 記憶の読み込みに失敗しても、会話は記憶なしで続ける。
+function buildMemoryPrompt(ctx: ExtensionContext): string {
+  try {
+    return formatMemoryPrompt(readMemory(getMemoryPath(getAgentDir())), ctx.sessionManager?.getSessionId());
+  } catch {
+    return "";
+  }
+}
+
 // ヒントは起動ごとに1件だけ選び、画面のヘッダーにだけ表示する（system promptには入れない）。
 // 表示するのは起動したときの1回だけ。/new や /resume などでヘッダーを描き直すときは、ヒントを出さない。
 const startupTip = selectTip(getTipOS());
@@ -344,6 +381,11 @@ export function sakunyanExtension(pi: ExtensionAPI): void {
   let currentMode = getDefaultMode();
   // ctxはイベントごとに別オブジェクトなので、表示の寿命は拡張のセッションで管理する。
   let keyStatusDisplay: KeyStatusDisplay | undefined;
+  // セッションの開始・終了のたびに進め、裏で動く記憶の処理が古いセッションの結果を保存しないようにする。
+  let sessionGeneration = 0;
+  let memoryRun: Promise<unknown> | undefined;
+  // 記憶の文章は各セッションの最初の質問で1回だけ組み立て、会話の途中では変えない。
+  let memoryPrompt: string | undefined;
   const runtimeOS = getRuntimeOS();
   let activity: {
     color: "accent" | "success";
@@ -381,13 +423,44 @@ export function sakunyanExtension(pi: ExtensionAPI): void {
     },
   });
 
-  // 組み立て順: piの基本 → 応答モード → 実行環境 → 教室共通のルール（パッケージが提供する固定の内容）。
+  // 要約と畳み込みを裏で始める。失敗で起動を止めないよう、準備の段階のエラーも飲み込む。
+  const startMemoryMaintenance = (ctx: ExtensionContext) => {
+    if (memoryRun) return;
+    try {
+      const summarize = createGenerator(ctx, SUMMARY_SYSTEM_PROMPT);
+      const fold = createGenerator(ctx, FOLD_SYSTEM_PROMPT);
+      if (!summarize || !fold) return;
+      const generation = sessionGeneration;
+      const agentDir = getAgentDir();
+      const run = runMemoryMaintenance({
+        sessionsDir: getSessionsDir(agentDir),
+        memoryPath: getMemoryPath(agentDir),
+        currentSessionFile: ctx.sessionManager.getSessionFile(),
+        summarize,
+        fold,
+        isCurrent: () => sessionGeneration === generation,
+      }).catch(() => undefined).finally(() => {
+        if (memoryRun === run) memoryRun = undefined;
+      });
+      memoryRun = run;
+    } catch {
+      // 次の起動で再試行する。
+    }
+  };
+
+  // 組み立て順: piの基本 → 記憶（意味記憶 → 最近の学習） → 応答モード → 実行環境 → 教室共通のルール。
+  // 記憶をsakunyanの指示の先頭に置き、モードの指示と教室ルールをあとに置いて、そちらを優先させる。
   // 画面のあるモードでも、ないモード（-p など）でも、選択中の応答モードに関係なく足す。
-  pi.on("before_agent_start", (event) => ({
-    systemPrompt: `${event.systemPrompt}\n\n${currentMode.prompt}\n\n利用者の実行環境は${runtimeOS}です。操作手順やコマンドはこの環境に合わせて案内してください。ChromebookではLinux開発環境のターミナルを想定してください。シェルが不明で手順が異なる場合は確認してください。利用者が別の環境やリモート環境について質問した場合は、その指定を優先してください。\n\n${CLASSROOM_RULES_PROMPT}`,
-  }));
+  pi.on("before_agent_start", (event, ctx) => {
+    memoryPrompt ??= buildMemoryPrompt(ctx);
+    return {
+      systemPrompt: `${event.systemPrompt}${memoryPrompt ? `\n\n${memoryPrompt}` : ""}\n\n${currentMode.prompt}\n\n利用者の実行環境は${runtimeOS}です。操作手順やコマンドはこの環境に合わせて案内してください。ChromebookではLinux開発環境のターミナルを想定してください。シェルが不明で手順が異なる場合は確認してください。利用者が別の環境やリモート環境について質問した場合は、その指定を優先してください。\n\n${CLASSROOM_RULES_PROMPT}`,
+    };
+  });
 
   pi.on("session_start", async (event, ctx) => {
+    sessionGeneration += 1;
+    memoryPrompt = undefined;
     keyStatusDisplay?.dispose();
     keyStatusDisplay = undefined;
     if (ctx.mode !== "tui") return;
@@ -415,14 +488,19 @@ export function sakunyanExtension(pi: ExtensionAPI): void {
       invalidate() {},
     }));
     void checkForUpdate(ctx);
+    // 直前の会話の要約が最初の質問に間に合いやすいよう、接続確認と並行して裏で始める。
+    startMemoryMaintenance(ctx);
     if (await setupModel(ctx)) {
       keyStatusDisplay = installKeyStatusDisplay(ctx);
       renderStatus(ctx);
       ctx.ui.setWorkingMessage(messages.ui.thinking);
+      // 接続確認の前にAPIキーがなくて失敗した分を、ここでもう一度試す（実行中なら何もしない）。
+      startMemoryMaintenance(ctx);
     }
   });
 
   pi.on("session_shutdown", () => {
+    sessionGeneration += 1;
     keyStatusDisplay?.dispose();
     keyStatusDisplay = undefined;
   });
