@@ -106,14 +106,26 @@ test("フッターは設定が済むまで出さず、会話の量は会話が�
 
   const unknown = formatFooterLines({ ...state, ready: true, conversationStarted: true, contextPercent: null }, theme, 100);
   assert.match(unknown[1], /会話の量 \?\/1\.0M/);
+  const reasoning = { ...state, ready: true, reasoning: true, thinkingLevel: "high" };
+  assert.match(formatFooterLines(reasoning, theme, 100)[1], /deepseek\/deepseek-v4-flash • high$/);
+  assert.match(formatFooterLines({ ...reasoning, thinkingLevel: "off" }, theme, 100)[1], / • thinking off$/);
+  for (const width of [1, 20, 40, 60, 100]) {
+    for (const conversationStarted of [false, true]) {
+      for (const line of formatFooterLines({ ...reasoning, conversationStarted }, theme, width)) {
+        assert.ok(visibleWidth(line) <= width, line);
+      }
+    }
+  }
 });
 
 function startSession({ apiKey, probeOk, cwd = "/project", entries = [] }) {
+  let thinkingLevel = "high";
   const handlers = new Map();
   sakunyanExtension({
     on: (event, handler) => handlers.set(event, handler),
     registerCommand() {},
     setActiveTools() {},
+    getThinkingLevel: () => thinkingLevel,
   });
   const screen = { header: undefined, footer: undefined, widgets: new Map(), duringKeyInput: undefined };
   const statuses = new Map();
@@ -131,7 +143,7 @@ function startSession({ apiKey, probeOk, cwd = "/project", entries = [] }) {
     isIdle: () => true,
     sessionManager: { getEntries: () => entries },
     getContextUsage: () => ({ tokens: 4000, contextWindow: 1_000_000, percent: 0.4 }),
-    model: { id: "deepseek/deepseek-v4-flash", contextWindow: 1_000_000 },
+    model: { id: "deepseek/deepseek-v4-flash", contextWindow: 1_000_000, reasoning: true },
     modelRegistry: {
       find: () => ({ baseUrl: "http://127.0.0.1:9/v1" }),
       complete: async () => {
@@ -158,7 +170,10 @@ function startSession({ apiKey, probeOk, cwd = "/project", entries = [] }) {
     },
     shutdown() {},
   };
-  return { run: () => handlers.get("session_start")({ reason: "startup" }, context), render, screen };
+  return { run: () => handlers.get("session_start")({ reason: "startup" }, context), render, screen,
+    setThinkingLevel: (level) => { thinkingLevel = level; },
+    setModel: (model) => { context.model = model; },
+  };
 }
 
 const withFetch = async (fetchImpl, run) => {
@@ -227,4 +242,19 @@ test("設定が済んだあとは、ヒント1つ・1行の更新のお知らせ
   const footer = talking.render().footer.join("\n");
   assert.match(footer, /💬 会話の量 0\.4%\/1\.0M/);
   assert.doesNotMatch(talking.render().header, /ホームのフォルダで起動したよ/);
+}));
+
+test("設定後のモデル名と思考段階は、会話の前後と段階・モデル変更を描画のたびに反映する", () => withFetch(registry, async () => {
+  for (const entries of [[], [{ type: "message", message: { role: "user" } }]]) {
+    const session = startSession({ apiKey: "dummy-key", probeOk: true, entries });
+    await session.run();
+    assert.match(session.render().footer[1], /deepseek\/deepseek-v4-flash • high$/);
+    session.setThinkingLevel("low");
+    assert.match(session.render().footer[1], /deepseek\/deepseek-v4-flash • low$/);
+    session.setThinkingLevel("off");
+    assert.match(session.render().footer[1], /deepseek\/deepseek-v4-flash • thinking off$/);
+    session.setModel({ id: "plain-model", contextWindow: 100_000, reasoning: false });
+    assert.match(session.render().footer[1], /plain-model$/);
+    assert.doesNotMatch(session.render().footer[1], / • |\(auto\)|\$|↑|↓/);
+  }
 }));

@@ -73,6 +73,8 @@ export type FooterState = {
   contextPercent: number | null;
   contextWindow: number;
   modelId: string | undefined;
+  reasoning?: boolean;
+  thinkingLevel?: string;
   statuses: string[];
 };
 
@@ -109,14 +111,23 @@ export function formatFooterLines(state: FooterState, theme: DisplayTheme, width
   if (state.branch) location = `${location} (${state.branch})`;
   const lines = [fit(theme.fg("dim", location))];
 
+  let left = "";
   if (state.conversationStarted) {
     const percent = state.contextPercent === null ? "?" : `${state.contextPercent.toFixed(1)}%`;
     const amount = `${messages.footer.conversationAmount} ${percent}/${formatTokenCount(state.contextWindow)}`;
     const value = state.contextPercent ?? 0;
-    const left = value > 90 ? theme.fg("error", amount) : value > 70 ? theme.fg("warning", amount) : theme.fg("dim", amount);
-    const right = state.modelId ?? "";
-    const gap = width - visibleWidth(amount) - visibleWidth(right);
-    lines.push(right && gap >= 2 ? `${left}${" ".repeat(gap)}${theme.fg("dim", right)}` : fit(left));
+    left = value > 90 ? theme.fg("error", amount) : value > 70 ? theme.fg("warning", amount) : theme.fg("dim", amount);
+  }
+  let right = state.modelId ?? "";
+  if (right && state.reasoning) {
+    const level = state.thinkingLevel ?? "off";
+    right += level === "off" ? " • thinking off" : ` • ${level}`;
+  }
+  if (left || right) {
+    const available = width - visibleWidth(left) - 2;
+    const model = available > 0 ? truncateToWidth(right, available, "") : "";
+    const gap = Math.max(0, width - visibleWidth(left) - visibleWidth(model));
+    lines.push(model ? `${left}${" ".repeat(gap)}${theme.fg("dim", model)}` : fit(left));
   }
 
   const statuses = state.statuses.map((text) => text.replace(/[\r\n\t]/g, " ").replace(/ +/g, " ").trim()).filter(Boolean);

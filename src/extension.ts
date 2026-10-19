@@ -366,6 +366,7 @@ function readFooterState(
     contextPercent: usage ? usage.percent : 0,
     contextWindow: usage?.contextWindow ?? model?.contextWindow ?? 0,
     modelId: model?.id,
+    reasoning: model?.reasoning ?? false,
     statuses: [...footerData.getExtensionStatuses().entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([, text]) => text),
@@ -467,7 +468,10 @@ export function sakunyanExtension(pi: ExtensionAPI): void {
       invalidate() {},
     }));
     ctx.ui.setFooter?.((_tui, theme, footerData) => ({
-      render: (width: number) => formatFooterLines(readFooterState(ctx, footerData, isReady()), theme, width),
+      render: (width: number) => formatFooterLines({
+        ...readFooterState(ctx, footerData, isReady()),
+        thinkingLevel: pi.getThinkingLevel(),
+      }, theme, width),
       invalidate() {},
     }));
     void findUpdate().then((version) => {
