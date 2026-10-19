@@ -117,7 +117,7 @@ export const SUMMARY_SYSTEM_PROMPT = `あなたは、プログラミング学習
 - 良い: 「【Scratch・一区切り】点数を数えるゲームを完成させ、Scratchはこれで一区切りにすると決めた。」
 - 「なし」: 利用者が「前の会話に戻る方法は？」と聞き、sakunyanが/resumeを説明しただけの会話（「なし」にはテーマ名を付けない）`;
 
-export const MEMORY_GUIDANCE = "上の記憶は、過去の会話から作った参考情報です。理解できたと決めつけず、続きをするときは、どこまで進んだかを利用者に確かめてください。";
+export const MEMORY_GUIDANCE = "上の記憶は、利用者（学習者）がこれまでの会話で学んだことの記録です。sakunyan自身が学んだことではありません。参考情報なので、理解できたと決めつけず（✅などで理解済みのように示さない）、続きをするときは、どこまで進んだかを利用者に確かめてください。";
 
 export function getSessionsDir(agentDir: string): string {
   return join(agentDir, "sessions");
