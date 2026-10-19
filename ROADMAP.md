@@ -8,7 +8,7 @@ README の設計方針に基づく実装順序。先の機能のための過剰�
 - [x] pi の npm パッケージを依存関係として組み込めることを確認する
 - [x] macOS で pi を起動する
 - [x] Windows + Git Bash で pi を起動する
-- [x] OpenRouter の接続先を `openrouter` / `deepseek/deepseek-v4-flash` に固定する
+- [x] OpenRouter の接続先を `openrouter` / `deepseek/deepseek-v4.1-flash-1017` に固定する
 - [ ] 有効なAPIキーを使った実API接続を手動確認する
 - [ ] 日本語入力・実モデル応答の表示を確認する
 - [x] pi の拡張機能から system prompt、status、widget を変更できることを確認する
@@ -103,7 +103,7 @@ README の設計方針に基づく実装順序。先の機能のための過剰�
 ## Phase 5：モデル運用
 
 - [x] 運営側が指定する sakunyan のデフォルトモデルを設定する
-- [x] OpenRouter のモデル ID と固定方針を決める（`deepseek/deepseek-v4-flash`）
+- [x] OpenRouter のモデル ID と固定方針を決める（`deepseek/deepseek-v4.1-flash-1017`。比較根拠と公開前の確認事項は [モデル選定](docs/deepseek-model-selection.md)）
 - [ ] モデルの上書き方法をスラッシュコマンドまたは詳細設定にする
 - [x] 通常画面にモデル選択 UI を出さない
 - [ ] モデル変更時の日本語メッセージを追加する
