@@ -18,7 +18,7 @@ import {
   updateMemory,
   upsertEpisode,
 } from "../dist/memory.js";
-import { MAX_SEMANTIC_CHARS, parseFoldOutput, renderSemantic, SEMANTIC_VERSION, validateSemantic } from "../dist/semantic-memory.js";
+import { MAX_SEMANTIC_CHARS, missingTopics, parseFoldOutput, renderSemantic, SEMANTIC_VERSION, validateSemantic } from "../dist/semantic-memory.js";
 import { writeSession } from "./fixtures/memory-sessions.js";
 
 process.env.TZ = "Asia/Tokyo";
@@ -93,7 +93,7 @@ test("畳み込みに失敗したら、意味記憶も印も変わらず、あ�
   const path = getMemoryPath(agentDir);
   await seed(path, stateWith(7));
   const before = readFileSync(path, "utf8");
-  for (const generate of [async () => undefined, async () => "形が違う", async () => JSON.stringify({ ...content(), topics: Array(6).fill(content().topics[0]) }), async () => { throw new Error("boom"); }]) {
+  for (const generate of [async () => undefined, async () => "形が違う", async () => JSON.stringify({ ...content(), topics: Array.from({ length: 9 }, (_, index) => content(`T${index}`).topics[0]) }), async () => { throw new Error("boom"); }]) {
     assert.equal(await foldOnce(path, generate, () => true), "failed");
     assert.equal(readFileSync(path, "utf8"), before);
   }
@@ -165,7 +165,7 @@ test("決まりに合わない出力は、どこが違うかを伝えて1回だ�
   assert.equal(await foldOnce(path, generate, () => true), "folded");
   assert.equal(inputs.length, 2);
   assert.ok(inputs[1].startsWith(inputs[0]));
-  assert.match(inputs[1], /## 前回の出力（決まりに合っていません）/);
+  assert.match(inputs[1], /## 前回の出力（決まりに合っていないところがあります）/);
   assert.match(inputs[1], /「Python」 の progress が110文字です（最大100文字）/);
   assert.equal(readMemory(path).semantic.topics[0].progress, "クラスまで");
 });
@@ -182,4 +182,63 @@ test("直してもらっても合わなければ失敗にし、JSONでない出�
   assert.equal(await foldOnce(path, async () => (calls += 1, "JSONではありません"), () => true), "failed");
   assert.equal(calls, 1);
   assert.equal(readMemory(path).semantic, null);
+});
+
+test("取り込む記録のテーマが抜けているか、表記ゆれを同じとみなして調べる", () => {
+  const json = JSON.stringify({ topics: [{ name: "Python" }, { name: "HTML/CSS" }] });
+  assert.deepEqual(missingTopics(json, ["python", "CSS", "html・css", "Git"]), ["Git"]);
+  assert.deepEqual(missingTopics("壊れた", ["Git"]), []);
+});
+
+test("取り込む記録のテーマが抜けていたら1回だけ直してもらい、直らなくても決まりに合う結果は使う", async () => {
+  const agentDir = tempAgentDir();
+  const path = getMemoryPath(agentDir);
+  const state = stateWith(6);
+  state.episodes = state.episodes.map((item) => ({ ...item, topic: item.sessionId === "e1" ? "Git" : "Python" }));
+  await seed(path, state);
+  const inputs = [];
+  const withoutGit = JSON.stringify(content("Python"));
+  const withGit = JSON.stringify({ ...content("Python"), topics: [...content("Python").topics, { name: "Git", status: "学習中", progress: "add と commit" }] });
+  assert.equal(await foldOnce(path, async (input) => (inputs.push(input), inputs.length === 1 ? withoutGit : withGit), () => true), "folded");
+  assert.match(inputs[0], /- 2026-10-01: 【Git】e1の要約/);
+  assert.match(inputs[1], /テーマ「Git」が topics に入っていません/);
+  // 最後に学んだ日が分かる Git（10/01）が、日付の分からない Python より前に並ぶ。
+  assert.deepEqual(readMemory(path).semantic.topics.map(({ name, lastStudied }) => [name, lastStudied]), [["Git", "2026-10-01"], ["Python", undefined]]);
+
+  // 直しても抜けているときは、失敗にせず、その記録の要約から1行作って入れる（畳み込みが止まらず、テーマも消えない）。
+  const other = getMemoryPath(tempAgentDir());
+  await seed(other, state);
+  let calls = 0;
+  assert.equal(await foldOnce(other, async () => (calls += 1, withoutGit), () => true), "folded");
+  assert.equal(calls, 2);
+  assert.deepEqual(readMemory(other).semantic.topics.map(({ name, progress }) => [name, progress]), [["Git", "e1の要約"], ["Python", "クラスまで"]]);
+});
+
+test("残すテーマはプログラムが決める: 前のテーマを戻し、学習中→一区切り→見送り、新しい順に5件", async () => {
+  const { arrangeTopics } = await import("../dist/semantic-memory.js");
+  const previous = [
+    { name: "Scratch", status: "一区切り", progress: "ゲーム", lastStudied: "2026-09-03" },
+    { name: "JavaScript", status: "見送り", progress: "やめた", lastStudied: "2026-09-10" },
+    { name: "HTML/CSS", status: "学習中", progress: "背景色", lastStudied: "2026-10-04" },
+    { name: "micro:bit", status: "一区切り", progress: "LED", lastStudied: "2026-09-08" },
+    { name: "Python", status: "学習中", progress: "辞書まで", lastStudied: "2026-10-07" },
+  ];
+  // モデルは学習中の HTML/CSS を書き忘れ、新しい Git を入れた。
+  const model = [
+    { name: "Python", status: "学習中", progress: "クラスまで" },
+    { name: "Scratch", status: "一区切り", progress: "ゲーム" },
+    { name: "JavaScript", status: "見送り", progress: "やめた" },
+    { name: "micro:bit", status: "一区切り", progress: "LED" },
+    { name: "Git", status: "学習中", progress: "commit まで" },
+  ];
+  const folded = [{ timestamp: "2026-10-10T10:00:00.000Z", summary: "クラスを作った。", topic: "Pythonクラス" }, { timestamp: "2026-09-27T10:00:00.000Z", summary: "commit した。", topic: "Git" }];
+  const topics = arrangeTopics(model, previous, folded);
+  assert.deepEqual(topics.map(({ name, status, lastStudied }) => [name, status, lastStudied]), [
+    ["Python", "学習中", "2026-10-10"],
+    ["HTML/CSS", "学習中", "2026-10-04"],
+    ["Git", "学習中", "2026-09-27"],
+    ["micro:bit", "一区切り", "2026-09-08"],
+    ["Scratch", "一区切り", "2026-09-03"],
+  ]);
+  assert.equal(topics.find(({ name }) => name === "HTML/CSS").progress, "背景色");
 });

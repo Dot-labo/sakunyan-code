@@ -3,10 +3,14 @@ import { dirname, join } from "node:path";
 import lockfile from "proper-lockfile";
 import { containsSecret } from "./secrets.js";
 import {
+  arrangeTopics,
   buildFoldInput,
   buildRepairInput,
   checkFoldOutput,
+  checkSemantic,
   isEmptySemantic,
+  missingTopicProblem,
+  missingTopics,
   renderSemantic,
   SEMANTIC_VERSION,
   validateSemantic,
@@ -20,7 +24,7 @@ import {
 
 export const NO_SUMMARY = "なし";
 /** 要約の作り方（対象の条件やプロンプト）を変えたら上げる。版が違う、畳み込んでいないエピソードは要約し直す。 */
-export const SUMMARY_VERSION = 3;
+export const SUMMARY_VERSION = 7;
 export const FORMAT_VERSION = 1;
 /** 畳み込まずに残すエピソードの数。これを超えた古い分を意味記憶に畳み込む。 */
 export const RECENT_EPISODES = 5;
@@ -44,6 +48,8 @@ export type Episode = {
   sessionModified: number;
   summary: string;
   summaryVersion: number;
+  /** 要約のときにモデルが付けたテーマ名（例: Python）。畳み込みでテーマが抜けていないかを確かめるのに使う */
+  topic?: string;
   /** 畳み込んだときの意味記憶の revision。ないものは畳み込んでいない */
   foldedRevision?: number;
 };
@@ -78,12 +84,14 @@ export const SUMMARY_SYSTEM_PROMPT = `あなたは、プログラミング学習
 会話ログは「利用者:」と「sakunyan:」（学習を手伝うAI）の発言でできています。
 
 ## 書くこと
+- 先頭に【テーマ名】を付ける。テーマ名は言語・ツール・作品の名前だけにする（例: 【Python】【HTML/CSS】【Git】【Scratch】【じゃんけんゲーム】）。文法や機能の名前（【if文】【Pythonクラス】など）にはしない
 - 日本語150文字以内、1〜2文。主語は利用者にする（「〜を練習した」「〜でつまずいた」）
 - 利用者が実際に取り組んだこと、どこまで進んだか、次にやることを、事実だけで書く
-- 次にやることは、会話の中で決まった場合だけ、会話の言葉どおりに書く（言いかえたり、くわしくしたりしない）
+- 次にやることは、会話の中で決まった場合だけ、会話の言葉どおりに書く（言いかえたり、くわしくしたりしない）。決まっていなければ何も書かない（「決まっていない」とも書かない）
 - 利用者が実際にしたこと・言ったことを書く。sakunyanの推測（「〜のはず」「〜が原因かも」）は事実として書かない
 - つまずいた点、混乱した点、間違えた点があれば必ず書く（解決したかどうかも書く）
 - 「理解した」「できた」は、利用者が自分で書けた・動いたと言った場合だけ書く。説明を聞いただけなら「説明を受けた」と書く
+- 何かを作りたい・学びたいと相談して答えやコードを受け取っただけでも、「〜を作りたいと相談し、完成したコードを受け取った（まだ自分では試していない）」のように書く
 
 ## 書かないこと
 - 「理解力が高い」「準備ができている」などの評価や、「〜すると良いでしょう」などの助言
@@ -91,15 +99,16 @@ export const SUMMARY_SYSTEM_PROMPT = `あなたは、プログラミング学習
 - コード、個人情報、APIキーやパスワードなどの秘密情報
 - 前置き、見出し、箇条書き、「利用者:」のような話し手の名前
 
-## 「なし」とだけ返すとき
+## 「なし」とだけ返すとき（「なし」の2文字だけを返し、理由は書かない）
 - あいさつや接続確認だけの会話
 - sakunyanやツール自体の使い方（コマンド、会話の再開方法など）を聞いただけの会話
-- 利用者が新しく何かを学んだり、取り組んだりしていない会話
+- お礼やあいさつだけで、学習や相談の中身がない会話
 
 ## 例
-- 良い: 「Pythonのリスト内包表記を練習し、条件付きのものまで自分で書けた。次は辞書内包表記に進む。」
-- 悪い: 「ユーザーはリスト内包表記を学び、高い理解力を示しました。」（評価、第三者の書き方）
-- 「なし」: 利用者が「前の会話に戻る方法は？」と聞き、sakunyanが/resumeを説明しただけの会話`;
+- 良い: 「【Python】リスト内包表記を練習し、条件付きのものまで自分で書けた。次は辞書に進む。」
+- 悪い: 「ユーザーはリスト内包表記を学び、高い理解力を示しました。」（テーマ名がない、評価、第三者の書き方）
+- 良い: 「【じゃんけんゲーム】作りたいと相談し、完成したコードを受け取った（まだ自分では試していない）。」
+- 「なし」: 利用者が「前の会話に戻る方法は？」と聞き、sakunyanが/resumeを説明しただけの会話（「なし」にはテーマ名を付けない）`;
 
 export const MEMORY_GUIDANCE = "上の記憶は、過去の会話から作った参考情報です。理解できたと決めつけず、続きをするときは、どこまで進んだかを利用者に確かめてください。";
 
@@ -231,10 +240,16 @@ export function normalizeSummary(output: string): string | undefined {
     .replace(/```[a-z]*\n?/gi, "")
     .replace(/\s*\n\s*/g, " ")
     .trim()
-    // 会話ログの書き方をまねて付いた話し手の名前を取る。
-    .replace(/^(?:利用者|sakunyan|要約)\s*[:：]\s*/i, "");
+    // 会話ログの書き方をまねて付いた話し手の名前と、先頭の【テーマ名】を取る（テーマ名は別に持つ）。
+    .replace(/^(?:利用者|sakunyan|要約)\s*[:：]\s*/i, "")
+    .replace(/^【[^】]{1,20}】\s*/, "")
+    // 「次にやることは決まっていない」のような中身のない文は取る（試用で確認）。
+    .replace(/[^。]*次に(?:やること|取り組むこと|すること)は?(?:まだ|特に)?(?:決まっていない|未定|ない)(?:です)?。?/g, "")
+    .trim();
   if (!text) return undefined;
   if (/^なし[。.]?$/.test(text)) return NO_SUMMARY;
+  // 要約の代わりに「なしにした理由」を返してきたものは、要約として使わない（試用で確認）。
+  if (/^なし[。.、:：]/.test(text) || /(?:ため|から)(?:、)?「?なし」?(?:とする|です)?。?$/.test(text) || /していないため。?$/.test(text)) return NO_SUMMARY;
   if (containsSecret(text)) return NO_SUMMARY;
   const characters = [...text];
   if (characters.length <= MAX_SUMMARY_CHARS) return text;
@@ -244,10 +259,24 @@ export function normalizeSummary(output: string): string | undefined {
   return sentenceEnd > 0 ? head.slice(0, sentenceEnd + 1) : head;
 }
 
-export async function summarizeTranscript(transcript: Transcript, generate: Generate): Promise<string | undefined> {
+const TOPIC_LABEL = /^\s*(?:(?:利用者|sakunyan|要約)\s*[:：]\s*)?【([^】]{1,20})】\s*/i;
+
+/** 要約の先頭の【テーマ名】を取り出す。なければ undefined。 */
+export function extractTopic(output: string): string | undefined {
+  const topic = TOPIC_LABEL.exec(output.replace(/```[a-z]*\n?/gi, "").trim())?.[1]?.replace(/\s+/g, " ").trim();
+  return topic && !containsSecret(topic) ? topic : undefined;
+}
+
+export type SummaryResult = { summary: string; topic?: string };
+
+export async function summarizeTranscript(transcript: Transcript, generate: Generate): Promise<SummaryResult | undefined> {
   try {
     const output = await generate(transcript.text);
-    return output === undefined ? undefined : normalizeSummary(output);
+    if (output === undefined) return undefined;
+    const summary = normalizeSummary(output);
+    if (summary === undefined) return undefined;
+    const topic = summary === NO_SUMMARY ? undefined : extractTopic(output);
+    return topic ? { summary, topic } : { summary };
   } catch {
     return undefined;
   }
@@ -312,7 +341,8 @@ function isEpisode(value: unknown): value is Episode {
     && typeof entry.sessionModified === "number"
     && typeof entry.summary === "string"
     && typeof entry.summaryVersion === "number"
-    && (entry.foldedRevision === undefined || typeof entry.foldedRevision === "number");
+    && (entry.foldedRevision === undefined || typeof entry.foldedRevision === "number")
+    && (entry.topic === undefined || typeof entry.topic === "string");
 }
 
 function readSemanticMemory(value: unknown): SemanticMemory | null | undefined {
@@ -463,16 +493,29 @@ export async function foldOnce(memoryPath: string, generate: Generate, isCurrent
   if (!batch.length) return "nothing";
   const revision = semanticRevision(state);
   let content: SemanticContent | undefined;
+  const previous = currentSemanticContent(state);
+  // モデルの結果に、残すテーマの選び方をプログラムで当ててから、決まり（5件、800文字など）を調べる。
+  const arrange = (check: ReturnType<typeof checkFoldOutput> | undefined) => {
+    if (!check?.content) return undefined;
+    return checkSemantic({ ...check.content, topics: arrangeTopics(check.content.topics, previous?.topics ?? [], batch) });
+  };
   try {
-    const input = buildFoldInput(currentSemanticContent(state), batch);
+    const input = buildFoldInput(previous, batch);
     const output = await generate(input);
     const first = output === undefined ? undefined : checkFoldOutput(output);
-    content = first?.content;
-    // 決まりに合わない（長すぎるなど）ときは、どこが違うかを伝えて1回だけ直してもらう。
-    // 直さずに捨て続けると、学ぶほど長くなる progress で畳み込みが永久に失敗してしまう（試用で確認）。
-    if (!content && first?.json && isCurrent()) {
-      const repaired = await generate(buildRepairInput(input, first.json, first.problems));
-      content = repaired === undefined ? undefined : checkFoldOutput(repaired).content;
+    const firstArranged = arrange(first);
+    content = firstArranged?.content;
+    // 決まりに合わない（長すぎるなど）か、取り込む記録のテーマが抜けているときは、
+    // どこが違うかを伝えて1回だけ直してもらう。
+    // - 直さずに捨て続けると、学ぶほど長くなる progress で畳み込みが永久に失敗してしまう（試用で確認）。
+    // - テーマが抜けるのは、テーマが5件を超えたときに学習中の新しいテーマが捨てられたため（試用で確認）。
+    //   直しても抜けているときは、決まりに合う結果を捨てずに使う（失敗し続けないため）。
+    const missing = first?.json ? missingTopics(first.json, batch.flatMap(({ topic }) => (topic ? [topic] : []))) : [];
+    const problems = [...(first?.problems ?? []), ...(firstArranged?.problems ?? []), ...missing.map(missingTopicProblem)];
+    if (first?.json && problems.length && isCurrent()) {
+      const repaired = await generate(buildRepairInput(input, first.json, problems));
+      const secondArranged = arrange(repaired === undefined ? undefined : checkFoldOutput(repaired));
+      if (secondArranged?.content) content = secondArranged.content;
     }
   } catch {
     content = undefined;
@@ -508,14 +551,15 @@ export async function runMemoryMaintenance(options: RunMemoryOptions): Promise<R
   const candidates = selectSessionsToSummarize(listSessionFiles(options.sessionsDir), state, options.currentSessionFile);
   for (const { file, transcript } of candidates) {
     if (!isCurrent()) return result;
-    const summary = await summarizeTranscript(transcript, options.summarize);
-    if (summary === undefined || !isCurrent()) continue;
+    const made = await summarizeTranscript(transcript, options.summarize);
+    if (made === undefined || !isCurrent()) continue;
     const episode: Episode = {
       sessionId: transcript.sessionId,
       timestamp: transcript.lastTimestamp || new Date(file.mtimeMs).toISOString(),
       sessionModified: file.mtimeMs,
-      summary,
+      summary: made.summary,
       summaryVersion: SUMMARY_VERSION,
+      ...(made.topic ? { topic: made.topic } : {}),
     };
     if (await updateMemory(options.memoryPath, (latest) => upsertEpisode(latest, episode))) result.summarized += 1;
   }
@@ -546,7 +590,7 @@ export function formatMemoryPrompt(state: MemoryState | undefined, currentSessio
       && episode.sessionId !== currentSessionId && !Number.isNaN(Date.parse(episode.timestamp)))
     .sort(byNewest);
   if (recent.length) {
-    sections.push(["## 最近の学習（新しい順）", ...recent.map(({ timestamp, summary }) => `- ${formatDate(timestamp)}: ${summary}`)].join("\n"));
+    sections.push(["## 最近の学習（新しい順）", ...recent.map(({ timestamp, summary, topic }) => `- ${formatDate(timestamp)}: ${topic ? `【${topic}】` : ""}${summary}`)].join("\n"));
   }
   if (!sections.length) return "";
   return [...sections, MEMORY_GUIDANCE].join("\n\n");

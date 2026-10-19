@@ -14,6 +14,7 @@ import {
   MAX_SUMMARY_CHARS,
   MEMORY_GUIDANCE,
   NO_SUMMARY,
+  extractTopic,
   normalizeSummary,
   readMemory,
   readTranscript,
@@ -102,9 +103,16 @@ test("未要約と再開を先に、版だけが古いものはあとに（「�
 test("要約を整える: 話し手の名前、文の終わりでの切り詰め、「なし」、秘密情報", () => {
   assert.equal(normalizeSummary("  リストを練習。\n次は辞書。  "), "リストを練習。 次は辞書。");
   assert.equal(normalizeSummary("利用者: for文を練習した。"), "for文を練習した。");
+  assert.equal(normalizeSummary("【Python】for文を練習した。"), "for文を練習した。");
+  assert.equal(extractTopic("【Python】for文を練習した。"), "Python");
+  assert.equal(extractTopic("利用者: 【HTML/CSS】h1を書いた。"), "HTML/CSS");
+  assert.equal(extractTopic("for文を練習した。"), undefined);
   assert.equal([...normalizeSummary("あ".repeat(300))].length, MAX_SUMMARY_CHARS);
   assert.equal(normalizeSummary(`${"い".repeat(100)}。${"う".repeat(100)}。`), `${"い".repeat(100)}。`);
   assert.equal(normalizeSummary("なし。"), NO_SUMMARY);
+  assert.equal(normalizeSummary("利用者にコードを丸ごと提供しただけの会話であり、利用者が新しく何かを学んだり、実際にコードを書いたり動かしたりしていないため。"), NO_SUMMARY);
+  assert.equal(normalizeSummary("なし。あいさつだけの会話のため。"), NO_SUMMARY);
+  assert.equal(normalizeSummary("再帰関数でつまずき、今日はやめた。次にやることは決まっていない。"), "再帰関数でつまずき、今日はやめた。");
   assert.equal(normalizeSummary("キー sk-abcdefghijklmnopqrstuvwxyz を設定した"), NO_SUMMARY);
   assert.equal(normalizeSummary("   "), undefined);
 });
@@ -160,7 +168,7 @@ test("注入は意味記憶→最近の学習（新しい順）→確かめの�
     semantic: { semanticVersion: SEMANTIC_VERSION, revision: 1, updatedAt: "2026-10-01T00:00:00.000Z", topics: [{ name: "Go", status: "一区切り", progress: "変数と制御構文" }], struggles: [], habits: ["自分で書いて確かめたい"] },
     episodes: [
       episode("d13", 13, { summary: "リスト内包表記を練習した。" }),
-      episode("d14", 14, { summary: "Flaskで簡単なAPIを作り始めた。" }),
+      episode("d14", 14, { summary: "Flaskで簡単なAPIを作り始めた。", topic: "Flask" }),
       episode("none", 15, { summary: NO_SUMMARY }),
       episode("current", 16),
       episode("old-version", 17, { summaryVersion: SUMMARY_VERSION - 1 }),
@@ -168,7 +176,7 @@ test("注入は意味記憶→最近の学習（新しい順）→確かめの�
     ],
   };
   const prompt = formatMemoryPrompt(state, "current");
-  assert.match(prompt, /^## 学習の全体像\n### テーマ\n- Go（一区切り）: 変数と制御構文\n### 学び方の傾向\n- 自分で書いて確かめたい\n\n## 最近の学習（新しい順）\n- 10\/17: old-versionの要約\n- 10\/14: Flask[^\n]*\n- 10\/13: リスト[^\n]*\n\n/);
+  assert.match(prompt, /^## 学習の全体像\n### テーマ\n- Go（一区切り）: 変数と制御構文\n### 学び方の傾向\n- 自分で書いて確かめたい\n\n## 最近の学習（新しい順）\n- 10\/17: old-versionの要約\n- 10\/14: 【Flask】Flask[^\n]*\n- 10\/13: リスト[^\n]*\n\n/);
   assert.ok(prompt.endsWith(MEMORY_GUIDANCE));
   assert.doesNotMatch(prompt, /なし|currentの要約|foldedの要約/);
   assert.equal(formatMemoryPrompt(emptyMemory(), undefined), "");
@@ -185,12 +193,14 @@ test("要約して保存し、「なし」は作り直さず、失敗したセ�
     calls.push(transcript);
     if (transcript.includes("接続確認")) return "なし";
     if (transcript.includes("while文")) return undefined;
-    return "for文を練習した。次はwhile文。";
+    return "【Python】for文を練習した。次はwhile文。";
   };
   assert.deepEqual(await runMemoryMaintenance({ ...options, summarize }), { summarized: 2, folded: 0 });
   assert.equal(calls.length, 3);
   const saved = readMemory(options.memoryPath).episodes;
   assert.deepEqual(saved.map(({ sessionId, summary }) => [sessionId, summary]).sort(), [["learn", "for文を練習した。次はwhile文。"], ["probe", NO_SUMMARY]]);
+  assert.equal(saved.find(({ sessionId }) => sessionId === "learn").topic, "Python");
+  assert.equal(saved.find(({ sessionId }) => sessionId === "probe").topic, undefined);
 
   calls.length = 0;
   await runMemoryMaintenance({ ...options, summarize: async (transcript) => (calls.push(transcript), "while文を練習した。") });
