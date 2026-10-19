@@ -9,7 +9,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { sakunyanExtension } from "./extension.js";
 import { createGlobalSettings } from "./global-settings.js";
-import { MODEL_ID, MODEL_PROVIDER } from "./model-config.js";
+import { MODEL_CONFIG, MODEL_ID, MODEL_PROVIDER } from "./model-config.js";
 import { getDefaultMode } from "./modes.js";
 import { projectPolicyExtension } from "./project-policy.js";
 
@@ -33,6 +33,7 @@ export async function createSakunyanRuntime(args: Args, sessionManager: SessionM
       },
     });
     services.settingsManager = settingsManager;
+    services.modelRuntime.registerProvider(MODEL_PROVIDER, { models: [MODEL_CONFIG] });
     const model = resolveCliModel({ cliProvider: MODEL_PROVIDER, cliModel: MODEL_ID, modelRuntime: services.modelRuntime });
     if (model.error) throw new Error(model.error);
     if (args.apiKey) await services.modelRuntime.setRuntimeApiKey(MODEL_PROVIDER, args.apiKey);

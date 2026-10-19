@@ -78,7 +78,7 @@ sakunyan --help
 
 ```text
 プロバイダ: openrouter
-モデル: deepseek/deepseek-v4-flash
+モデル: deepseek/deepseek-v4.1-flash-1017
 ```
 
 APIキーは他の人に見せたり、GitHubへ公開したりしないでください。

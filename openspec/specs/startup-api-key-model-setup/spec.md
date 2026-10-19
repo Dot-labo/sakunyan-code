@@ -8,14 +8,14 @@
 
 ### Requirement: プロバイダとモデルを固定する
 
-システムは、すべてのsakunyanセッションでOpenRouterをプロバイダとして使用し、モデル識別子を `deepseek/deepseek-v4-flash` に固定しなければならない。
+システムは、すべてのsakunyanセッションでOpenRouterをプロバイダとして使用し、モデル識別子を `deepseek/deepseek-v4.1-flash-1017` に固定しなければならない。
 
 プロバイダとモデル識別子の値は1つの設定箇所で管理し、起動処理と接続確認の両方がその設定を参照しなければならない。
 
 #### Scenario: 固定モデル設定でセッションを開始する
 
 - **WHEN** sakunyanがセッションを開始するとき
-- **THEN** セッションはプロバイダ `openrouter` とモデル識別子 `deepseek/deepseek-v4-flash` を使用しなければならない
+- **THEN** セッションはプロバイダ `openrouter` とモデル識別子 `deepseek/deepseek-v4.1-flash-1017` を使用しなければならない
 
 #### Scenario: 固定値を一元管理する
 
@@ -69,7 +69,7 @@
 
 - **WHEN** 生徒がAPIキー入力待ち状態でAPIキーを入力して送信したとき
 - **THEN** sakunyanはそのキーをOpenRouterの実行時認証へ反映しなければならない
-- **AND** `deepseek/deepseek-v4-flash` で接続確認を再試行しなければならない
+- **AND** `deepseek/deepseek-v4.1-flash-1017` で接続確認を再試行しなければならない
 
 #### Scenario: 送信したAPIキーが有効である
 
