@@ -50,13 +50,47 @@ test("publish workflow gates credentials on verified main tarball and serializes
   assert.match(publish, /download-artifact@[a-f0-9]{40}/);
   assert.match(publish, /node scripts\/publish-check.mjs >> "\$GITHUB_OUTPUT"/);
   assert.match(publish, /if: steps.version.outputs.publish == 'true'/);
-  assert.match(publish, /npm publish release\/\*\.tgz --ignore-scripts --access public --tag latest --provenance --registry=https:\/\/registry.npmjs.org/);
+  assert.match(publish, /npm publish \.\/release\/\*\.tgz --ignore-scripts --access public --tag latest --provenance --registry=https:\/\/registry.npmjs.org/);
   assert.doesNotMatch(publish, /npm (ci|run build|pack)/);
   assert.doesNotMatch(workflow, /NODE_AUTH_TOKEN|NPM_TOKEN|secrets\./);
   assert.equal((workflow.match(/npm install --global npm@11\.19\.0/g) ?? []).length, 2);
   assert.equal((workflow.match(/node-version: 24/g) ?? []).length, 2);
   assert.equal((workflow.match(/package-manager-cache: false/g) ?? []).length, 2);
   assert.ok([...workflow.matchAll(/uses: (\S+)/g)].every(([, action]) => /@[a-f0-9]{40}$/.test(action)));
+});
+
+test("actual publish command resolves the tarball locally with real npm (offline dry run)", () => {
+  const directory = mkdtempSync(join(tmpdir(), "sakunyan-publish-dry-run-"));
+  try {
+    mkdirSync(join(directory, "release"));
+    writeFileSync(join(directory, "package.json"), JSON.stringify({ name, version: "0.1.21" }));
+    writeFileSync(join(directory, "index.js"), "export {};\n");
+    const env = {
+      PATH: process.env.PATH, HOME: directory, USERPROFILE: directory,
+      npm_config_cache: join(directory, "cache"),
+      // A regression must never contact GitHub, even through git subprocesses.
+      GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "protocol.allow", GIT_CONFIG_VALUE_0: "never",
+    };
+    const packed = spawnSync("npm", ["pack", "--ignore-scripts", "--offline", "--pack-destination", "release"], {
+      cwd: directory, env, encoding: "utf8", timeout: 30000,
+    });
+    assert.equal(packed.status, 0, packed.stderr);
+    const workflow = readFileSync(".github/workflows/publish.yml", "utf8");
+    const command = workflow.match(/^        run: (npm publish .+)$/m)?.[1];
+    assert.ok(command, "publish command missing");
+    // Execute the real workflow command; disable publication and attestation only.
+    const result = spawnSync("bash", ["-euo", "pipefail", "-c", `${command} --dry-run --offline --provenance=false --json`], {
+      cwd: directory, env, encoding: "utf8", timeout: 30000,
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const output = JSON.parse(result.stdout);
+    const published = output.name ? output : output[name];
+    assert.equal(published.name, name, result.stdout);
+    assert.equal(published.version, "0.1.21");
+    assert.ok(published.files.some((file) => file.path === "index.js"));
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 function check({ version = "0.1.21", lockVersion = version, latest = "0.1.19", exact = { stdout: JSON.stringify(version) }, changes = null, gitStatus = 0 } = {}) {
