@@ -4,8 +4,9 @@ import lockfile from "proper-lockfile";
 import { containsSecret } from "./secrets.js";
 import {
   buildFoldInput,
+  buildRepairInput,
+  checkFoldOutput,
   isEmptySemantic,
-  parseFoldOutput,
   renderSemantic,
   SEMANTIC_VERSION,
   validateSemantic,
@@ -19,7 +20,7 @@ import {
 
 export const NO_SUMMARY = "なし";
 /** 要約の作り方（対象の条件やプロンプト）を変えたら上げる。版が違う、畳み込んでいないエピソードは要約し直す。 */
-export const SUMMARY_VERSION = 1;
+export const SUMMARY_VERSION = 3;
 export const FORMAT_VERSION = 1;
 /** 畳み込まずに残すエピソードの数。これを超えた古い分を意味記憶に畳み込む。 */
 export const RECENT_EPISODES = 5;
@@ -79,8 +80,10 @@ export const SUMMARY_SYSTEM_PROMPT = `あなたは、プログラミング学習
 ## 書くこと
 - 日本語150文字以内、1〜2文。主語は利用者にする（「〜を練習した」「〜でつまずいた」）
 - 利用者が実際に取り組んだこと、どこまで進んだか、次にやることを、事実だけで書く
-- 次にやることは、会話の中で決まった場合だけ書く
+- 次にやることは、会話の中で決まった場合だけ、会話の言葉どおりに書く（言いかえたり、くわしくしたりしない）
 - 利用者が実際にしたこと・言ったことを書く。sakunyanの推測（「〜のはず」「〜が原因かも」）は事実として書かない
+- つまずいた点、混乱した点、間違えた点があれば必ず書く（解決したかどうかも書く）
+- 「理解した」「できた」は、利用者が自分で書けた・動いたと言った場合だけ書く。説明を聞いただけなら「説明を受けた」と書く
 
 ## 書かないこと
 - 「理解力が高い」「準備ができている」などの評価や、「〜すると良いでしょう」などの助言
@@ -252,19 +255,26 @@ export async function summarizeTranscript(transcript: Transcript, generate: Gene
 
 export type SummaryCandidate = { file: SessionFile; transcript: Transcript };
 
-/** 畳み込んでいない今の版で、「なし」以外のエピソード。注入と畳み込みに使う。 */
+/**
+ * 注入と畳み込みに使うエピソード（「なし」以外）。版が古くても、要約し直されるまではそのまま使う。
+ * 外してしまうと、要約し直すまでの間、その内容がどこにも見えなくなるため。
+ */
 export function isUsableEpisode(episode: Episode): boolean {
-  return episode.summary !== NO_SUMMARY && episode.summaryVersion === SUMMARY_VERSION;
+  return episode.summary !== NO_SUMMARY;
 }
 
-function needsSummary(episode: Episode | undefined, mtimeMs: number): boolean {
-  if (!episode) return true;
-  if (mtimeMs > episode.sessionModified) return true;
+/** 要約する優先度。0 = 未要約か再開された、1 = 版だけが古い（「なし」以外）、2 = 版だけが古い「なし」。undefined は不要。 */
+function summaryPriority(episode: Episode | undefined, mtimeMs: number): number | undefined {
+  if (!episode || mtimeMs > episode.sessionModified) return 0;
   // 畳み込み済みのものは、中身がもう意味記憶にあるので、版が古くても要約し直さない（二重に反映しないため）。
-  return episode.foldedRevision === undefined && episode.summaryVersion !== SUMMARY_VERSION;
+  if (episode.foldedRevision !== undefined || episode.summaryVersion === SUMMARY_VERSION) return undefined;
+  return episode.summary === NO_SUMMARY ? 2 : 1;
 }
 
-/** 今のセッション以外で、要約が必要で要約できるものを、更新が新しい順に最大5件選ぶ。 */
+/**
+ * 今のセッション以外で、要約が必要で要約できるものを最大5件選ぶ。
+ * 未要約・再開されたものを先にし、版だけが古いものはそのあと（それぞれ更新が新しい順）。
+ */
 export function selectSessionsToSummarize(
   files: readonly SessionFile[],
   state: MemoryState,
@@ -272,17 +282,20 @@ export function selectSessionsToSummarize(
   limit = MAX_SUMMARIES_PER_RUN,
 ): SummaryCandidate[] {
   const stored = new Map(state.episodes.map((episode) => [episode.sessionId, episode]));
-  const selected: SummaryCandidate[] = [];
+  const ranked: (SummaryCandidate & { priority: number })[] = [];
   for (const file of [...files].sort((a, b) => b.mtimeMs - a.mtimeMs).slice(0, MAX_SCANNED_SESSIONS)) {
-    if (selected.length >= limit) break;
     if (file.path === currentSessionFile) continue;
     const sessionId = readSessionId(file.path);
-    if (!sessionId || !needsSummary(stored.get(sessionId), file.mtimeMs)) continue;
+    const priority = sessionId === undefined ? undefined : summaryPriority(stored.get(sessionId), file.mtimeMs);
+    if (priority === undefined) continue;
     const transcript = readTranscript(file.path);
     if (!transcript || !isSummarizable(transcript)) continue;
-    selected.push({ file, transcript });
+    ranked.push({ file, transcript, priority });
   }
-  return selected;
+  return ranked
+    .sort((a, b) => a.priority - b.priority || b.file.mtimeMs - a.file.mtimeMs)
+    .slice(0, limit)
+    .map(({ file, transcript }) => ({ file, transcript }));
 }
 
 // ---- 保存 ----
@@ -451,8 +464,16 @@ export async function foldOnce(memoryPath: string, generate: Generate, isCurrent
   const revision = semanticRevision(state);
   let content: SemanticContent | undefined;
   try {
-    const output = await generate(buildFoldInput(currentSemanticContent(state), batch));
-    content = output === undefined ? undefined : parseFoldOutput(output);
+    const input = buildFoldInput(currentSemanticContent(state), batch);
+    const output = await generate(input);
+    const first = output === undefined ? undefined : checkFoldOutput(output);
+    content = first?.content;
+    // 決まりに合わない（長すぎるなど）ときは、どこが違うかを伝えて1回だけ直してもらう。
+    // 直さずに捨て続けると、学ぶほど長くなる progress で畳み込みが永久に失敗してしまう（試用で確認）。
+    if (!content && first?.json && isCurrent()) {
+      const repaired = await generate(buildRepairInput(input, first.json, first.problems));
+      content = repaired === undefined ? undefined : checkFoldOutput(repaired).content;
+    }
   } catch {
     content = undefined;
   }
@@ -514,7 +535,7 @@ function formatDate(timestamp: string): string {
   return `${date.getMonth() + 1}/${date.getDate()}`;
 }
 
-/** 意味記憶と、畳み込んでいないエピソード（今のセッション・「なし」・古い版を除く）を、注入する形にする。 */
+/** 意味記憶と、畳み込んでいないエピソード（今のセッションと「なし」を除く）を、注入する形にする。 */
 export function formatMemoryPrompt(state: MemoryState | undefined, currentSessionId: string | undefined): string {
   if (!state) return "";
   const sections: string[] = [];

@@ -23,6 +23,7 @@ import {
   updateMemory,
   upsertEpisode,
 } from "../dist/memory.js";
+import { SEMANTIC_VERSION } from "../dist/semantic-memory.js";
 import { writeSession } from "./fixtures/memory-sessions.js";
 
 // 注入する日付（月/日）はローカル時刻で決まるので、テストでは日本時間に固定する。
@@ -78,20 +79,24 @@ test("今のセッションと要約できないものを除き、新しい順�
   assert.deepEqual(selected.map(({ transcript }) => transcript.sessionId), ["s6", "s5", "s4", "s3", "s2"]);
 });
 
-test("再開されたものと版が古い未畳み込みは選び直し、版が古くても畳み込み済みは選ばない", () => {
+test("未要約と再開を先に、版だけが古いものはあとに（「なし」は最後に）選び、畳み込み済みは版が古くても選ばない", () => {
   const agentDir = tempAgentDir();
   writeSession(agentDir, { id: "done", mtime: 1_000 });
   writeSession(agentDir, { id: "resumed", mtime: 3_000 });
+  writeSession(agentDir, { id: "new", mtime: 900 });
   writeSession(agentDir, { id: "old-version", mtime: 1_100 });
+  writeSession(agentDir, { id: "old-none", mtime: 1_300 });
   writeSession(agentDir, { id: "old-folded", mtime: 1_200 });
   const state = { ...emptyMemory(), episodes: [
     { ...episode("done", 13), sessionModified: 1_000_000 },
     { ...episode("resumed", 13), sessionModified: 2_000_000 },
     { ...episode("old-version", 13), sessionModified: 1_100_000, summaryVersion: SUMMARY_VERSION - 1 },
+    { ...episode("old-none", 13), sessionModified: 1_300_000, summaryVersion: SUMMARY_VERSION - 1, summary: NO_SUMMARY },
     { ...episode("old-folded", 13), sessionModified: 1_200_000, summaryVersion: SUMMARY_VERSION - 1, foldedRevision: 1 },
   ] };
-  const selected = selectSessionsToSummarize(listSessionFiles(getSessionsDir(agentDir)), state, undefined);
-  assert.deepEqual(selected.map(({ transcript }) => transcript.sessionId), ["resumed", "old-version"]);
+  const files = listSessionFiles(getSessionsDir(agentDir));
+  assert.deepEqual(selectSessionsToSummarize(files, state, undefined).map(({ transcript }) => transcript.sessionId), ["resumed", "new", "old-version", "old-none"]);
+  assert.deepEqual(selectSessionsToSummarize(files, state, undefined, 2).map(({ transcript }) => transcript.sessionId), ["resumed", "new"]);
 });
 
 test("要約を整える: 話し手の名前、文の終わりでの切り詰め、「なし」、秘密情報", () => {
@@ -149,10 +154,10 @@ test("壊れたmemory.jsonは上書きせず、注入もしない", async () => 
   assert.equal(formatMemoryPrompt(readMemory(path), undefined), "");
 });
 
-test("注入は意味記憶→最近の学習（新しい順）→確かめの一文で、除くものを除く", () => {
+test("注入は意味記憶→最近の学習（新しい順）→確かめの一文で、今のセッション・「なし」・畳み込み済みを除き、古い版は入れる", () => {
   const state = {
     ...emptyMemory(),
-    semantic: { semanticVersion: 1, revision: 1, updatedAt: "2026-10-01T00:00:00.000Z", topics: [{ name: "Go", status: "一区切り", progress: "変数と制御構文", next: "関数" }], struggles: [], habits: ["自分で書いて確かめたい"] },
+    semantic: { semanticVersion: SEMANTIC_VERSION, revision: 1, updatedAt: "2026-10-01T00:00:00.000Z", topics: [{ name: "Go", status: "一区切り", progress: "変数と制御構文" }], struggles: [], habits: ["自分で書いて確かめたい"] },
     episodes: [
       episode("d13", 13, { summary: "リスト内包表記を練習した。" }),
       episode("d14", 14, { summary: "Flaskで簡単なAPIを作り始めた。" }),
@@ -163,9 +168,9 @@ test("注入は意味記憶→最近の学習（新しい順）→確かめの�
     ],
   };
   const prompt = formatMemoryPrompt(state, "current");
-  assert.match(prompt, /^## 学習の全体像\n### テーマ\n- Go（一区切り）: 変数と制御構文。次は関数\n### 学び方の傾向\n- 自分で書いて確かめたい\n\n## 最近の学習（新しい順）\n- 10\/14: Flask[^\n]*\n- 10\/13: リスト[^\n]*\n\n/);
+  assert.match(prompt, /^## 学習の全体像\n### テーマ\n- Go（一区切り）: 変数と制御構文\n### 学び方の傾向\n- 自分で書いて確かめたい\n\n## 最近の学習（新しい順）\n- 10\/17: old-versionの要約\n- 10\/14: Flask[^\n]*\n- 10\/13: リスト[^\n]*\n\n/);
   assert.ok(prompt.endsWith(MEMORY_GUIDANCE));
-  assert.doesNotMatch(prompt, /なし|current|old-version|folded/);
+  assert.doesNotMatch(prompt, /なし|currentの要約|foldedの要約/);
   assert.equal(formatMemoryPrompt(emptyMemory(), undefined), "");
 });
 

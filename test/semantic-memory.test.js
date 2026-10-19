@@ -27,7 +27,7 @@ const tempAgentDir = () => mkdtempSync(join(tmpdir(), "sakunyan-semantic-"));
 const episode = (sessionId, day, extra = {}) => ({
   sessionId, timestamp: `2026-10-${String(day).padStart(2, "0")}T03:00:00.000Z`, sessionModified: 1, summary: `${sessionId}の要約`, summaryVersion: SUMMARY_VERSION, ...extra,
 });
-const content = (name = "Python") => ({ topics: [{ name, status: "学習中", progress: "クラスまで", next: "継承" }], struggles: [], habits: [] });
+const content = (name = "Python") => ({ topics: [{ name, status: "学習中", progress: "クラスまで" }], struggles: [], habits: [] });
 const stateWith = (count, extra = {}) => ({ ...emptyMemory(), ...extra, episodes: Array.from({ length: count }, (_, index) => episode(`e${index + 1}`, index + 1)) });
 
 async function seed(path, state) {
@@ -38,13 +38,15 @@ test("意味記憶は決まった形・件数・文字数・分量・秘密情�
   assert.deepEqual(validateSemantic(content()), content());
   assert.equal(validateSemantic({ ...content(), topics: Array.from({ length: 6 }, (_, index) => content(`T${index}`).topics[0]) }), undefined);
   assert.equal(validateSemantic({ topics: [{ name: "Python", status: "完了", progress: "x" }], struggles: [], habits: [] }), undefined);
-  assert.equal(validateSemantic({ topics: [{ name: "Python", status: "学習中", progress: "あ".repeat(81) }], struggles: [], habits: [] }), undefined);
+  assert.equal(validateSemantic({ topics: [{ name: "Python", status: "学習中", progress: "あ".repeat(101) }], struggles: [], habits: [] }), undefined);
   assert.equal(validateSemantic({ ...content(), struggles: ["a", "b", "c", "d"] }), undefined);
   assert.equal(validateSemantic({ ...content(), habits: ["キーは sk-abcdefghijklmnopqrstuv"] }), undefined);
   assert.equal(validateSemantic({ topics: [], struggles: [], habits: [] }).topics.length, 0);
+  // 次にやることは持たないので、モデルが付けてきても捨てる。
+  assert.deepEqual(validateSemantic({ topics: [{ name: "Python", status: "学習中", progress: "クラスまで", next: "継承" }], struggles: [], habits: [] }).topics[0], { name: "Python", status: "学習中", progress: "クラスまで" });
   // 5テーマ・3件・3件をすべて上限まで埋めると800文字を超えるので保存できない。
   const full = {
-    topics: Array.from({ length: 5 }, (_, index) => ({ name: `テーマ${index}`.padEnd(20, "あ"), status: "学習中", progress: "い".repeat(80), next: "う".repeat(40) })),
+    topics: Array.from({ length: 5 }, (_, index) => ({ name: `テーマ${index}`.padEnd(20, "あ"), status: "学習中", progress: "い".repeat(100) })),
     struggles: ["え".repeat(60), "お".repeat(60), "か".repeat(60)],
     habits: ["き".repeat(60), "く".repeat(60), "け".repeat(60)],
   };
@@ -82,7 +84,7 @@ test("畳み込みに成功すると、新しい意味記憶と畳み込み済�
   const raw = JSON.parse(readFileSync(path, "utf8"));
   assert.equal(raw.semantic.revision, raw.episodes.find(({ sessionId }) => sessionId === "e1").foldedRevision);
   const prompt = formatMemoryPrompt(state, undefined);
-  assert.match(prompt, /## 学習の全体像\n### テーマ\n- Python（学習中）: クラスまで。次は継承/);
+  assert.match(prompt, /## 学習の全体像\n### テーマ\n- Python（学習中）: クラスまで\n/);
   assert.doesNotMatch(prompt, /e1の要約/);
 });
 
@@ -148,4 +150,36 @@ test("裏の処理は、要約のあとにエピソードが5件以下になる�
   const state = readMemory(options.memoryPath);
   assert.equal(state.semantic.revision, 2);
   assert.equal(state.episodes.filter(({ foldedRevision }) => foldedRevision === undefined).length, 5);
+});
+
+test("決まりに合わない出力は、どこが違うかを伝えて1回だけ直してもらい、直れば反映する", async () => {
+  const agentDir = tempAgentDir();
+  const path = getMemoryPath(agentDir);
+  await seed(path, stateWith(6));
+  const tooLong = { ...content(), topics: [{ name: "Python", status: "学習中", progress: "あ".repeat(110) }] };
+  const inputs = [];
+  const generate = async (input) => {
+    inputs.push(input);
+    return JSON.stringify(inputs.length === 1 ? tooLong : content());
+  };
+  assert.equal(await foldOnce(path, generate, () => true), "folded");
+  assert.equal(inputs.length, 2);
+  assert.ok(inputs[1].startsWith(inputs[0]));
+  assert.match(inputs[1], /## 前回の出力（決まりに合っていません）/);
+  assert.match(inputs[1], /「Python」 の progress が110文字です（最大100文字）/);
+  assert.equal(readMemory(path).semantic.topics[0].progress, "クラスまで");
+});
+
+test("直してもらっても合わなければ失敗にし、JSONでない出力は直しを頼まない", async () => {
+  const agentDir = tempAgentDir();
+  const path = getMemoryPath(agentDir);
+  await seed(path, stateWith(6));
+  let calls = 0;
+  const tooLong = JSON.stringify({ ...content(), topics: [{ name: "Python", status: "学習中", progress: "あ".repeat(110) }] });
+  assert.equal(await foldOnce(path, async () => (calls += 1, tooLong), () => true), "failed");
+  assert.equal(calls, 2);
+  calls = 0;
+  assert.equal(await foldOnce(path, async () => (calls += 1, "JSONではありません"), () => true), "failed");
+  assert.equal(calls, 1);
+  assert.equal(readMemory(path).semantic, null);
 });
