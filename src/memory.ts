@@ -15,6 +15,7 @@ import {
   SEMANTIC_VERSION,
   validateSemantic,
   type SemanticContent,
+  type TopicEnd,
 } from "./semantic-memory.js";
 
 // 記憶は2層だけ。
@@ -24,7 +25,7 @@ import {
 
 export const NO_SUMMARY = "なし";
 /** 要約の作り方（対象の条件やプロンプト）を変えたら上げる。版が違う、畳み込んでいないエピソードは要約し直す。 */
-export const SUMMARY_VERSION = 7;
+export const SUMMARY_VERSION = 9;
 export const FORMAT_VERSION = 1;
 /** 畳み込まずに残すエピソードの数。これを超えた古い分を意味記憶に畳み込む。 */
 export const RECENT_EPISODES = 5;
@@ -50,6 +51,8 @@ export type Episode = {
   summaryVersion: number;
   /** 要約のときにモデルが付けたテーマ名（例: Python）。畳み込みでテーマが抜けていないかを確かめるのに使う */
   topic?: string;
+  /** 利用者がこの会話でそのテーマを終わりにした・やめたときだけ付く。意味記憶のテーマの状態はこれで決める */
+  topicStatus?: TopicEnd;
   /** 畳み込んだときの意味記憶の revision。ないものは畳み込んでいない */
   foldedRevision?: number;
 };
@@ -84,7 +87,9 @@ export const SUMMARY_SYSTEM_PROMPT = `あなたは、プログラミング学習
 会話ログは「利用者:」と「sakunyan:」（学習を手伝うAI）の発言でできています。
 
 ## 書くこと
-- 先頭に【テーマ名】を付ける。テーマ名は言語・ツール・作品の名前だけにする（例: 【Python】【HTML/CSS】【Git】【Scratch】【じゃんけんゲーム】）。文法や機能の名前（【if文】【Pythonクラス】など）にはしない
+- 先頭に【テーマ名】を付ける。テーマ名は言語・ツール・作品の名前だけにする（例: 【Python】【HTML/CSS】【Git】【Scratch】【じゃんけんゲーム】）。文法や機能の名前（【if文】【リスト】【Pythonクラス】など）にはしない
+- 「これまでのテーマ名」が与えられたら、当てはまるものはその名前をそのまま使う
+- 利用者がそのテーマを終わりにする・区切りをつけると言ったら【テーマ名・一区切り】、そのテーマをやめる・見送ると言ったら【テーマ名・見送り】と書く。その日の勉強をやめただけ（「今日はここまで」「また今度」）のときは付けない
 - 日本語150文字以内、1〜2文。主語は利用者にする（「〜を練習した」「〜でつまずいた」）
 - 利用者が実際に取り組んだこと、どこまで進んだか、次にやることを、事実だけで書く
 - 次にやることは、会話の中で決まった場合だけ、会話の言葉どおりに書く（言いかえたり、くわしくしたりしない）。決まっていなければ何も書かない（「決まっていない」とも書かない）
@@ -108,6 +113,8 @@ export const SUMMARY_SYSTEM_PROMPT = `あなたは、プログラミング学習
 - 良い: 「【Python】リスト内包表記を練習し、条件付きのものまで自分で書けた。次は辞書に進む。」
 - 悪い: 「ユーザーはリスト内包表記を学び、高い理解力を示しました。」（テーマ名がない、評価、第三者の書き方）
 - 良い: 「【じゃんけんゲーム】作りたいと相談し、完成したコードを受け取った（まだ自分では試していない）。」
+- 良い: 「【JavaScript・見送り】console.logを試したが、書き方がむずかしく、Pythonに集中するためやめた。」
+- 良い: 「【Scratch・一区切り】点数を数えるゲームを完成させ、Scratchはこれで一区切りにすると決めた。」
 - 「なし」: 利用者が「前の会話に戻る方法は？」と聞き、sakunyanが/resumeを説明しただけの会話（「なし」にはテーマ名を付けない）`;
 
 export const MEMORY_GUIDANCE = "上の記憶は、過去の会話から作った参考情報です。理解できたと決めつけず、続きをするときは、どこまで進んだかを利用者に確かめてください。";
@@ -242,7 +249,7 @@ export function normalizeSummary(output: string): string | undefined {
     .trim()
     // 会話ログの書き方をまねて付いた話し手の名前と、先頭の【テーマ名】を取る（テーマ名は別に持つ）。
     .replace(/^(?:利用者|sakunyan|要約)\s*[:：]\s*/i, "")
-    .replace(/^【[^】]{1,20}】\s*/, "")
+    .replace(/^【[^】]{1,30}】\s*/, "")
     // 「次にやることは決まっていない」のような中身のない文は取る（試用で確認）。
     .replace(/[^。]*次に(?:やること|取り組むこと|すること)は?(?:まだ|特に)?(?:決まっていない|未定|ない)(?:です)?。?/g, "")
     .trim();
@@ -259,24 +266,51 @@ export function normalizeSummary(output: string): string | undefined {
   return sentenceEnd > 0 ? head.slice(0, sentenceEnd + 1) : head;
 }
 
-const TOPIC_LABEL = /^\s*(?:(?:利用者|sakunyan|要約)\s*[:：]\s*)?【([^】]{1,20})】\s*/i;
+const TOPIC_LABEL = /^\s*(?:(?:利用者|sakunyan|要約)\s*[:：]\s*)?【([^】]{1,30})】\s*/i;
+const TOPIC_END = /^(.+?)\s*[・･:：]\s*(一区切り|見送り)$/;
+
+/** 要約の先頭の【テーマ名】（と、付いていれば「・一区切り」「・見送り」）を取り出す。 */
+export function extractTopicLabel(output: string): { topic: string; topicStatus?: TopicEnd } | undefined {
+  const label = TOPIC_LABEL.exec(output.replace(/```[a-z]*\n?/gi, "").trim())?.[1]?.replace(/\s+/g, " ").trim();
+  if (!label || containsSecret(label)) return undefined;
+  const ended = TOPIC_END.exec(label);
+  const topic = (ended?.[1] ?? label).trim();
+  if (!topic) return undefined;
+  return ended ? { topic, topicStatus: ended[2] as TopicEnd } : { topic };
+}
 
 /** 要約の先頭の【テーマ名】を取り出す。なければ undefined。 */
 export function extractTopic(output: string): string | undefined {
-  const topic = TOPIC_LABEL.exec(output.replace(/```[a-z]*\n?/gi, "").trim())?.[1]?.replace(/\s+/g, " ").trim();
-  return topic && !containsSecret(topic) ? topic : undefined;
+  return extractTopicLabel(output)?.topic;
 }
 
-export type SummaryResult = { summary: string; topic?: string };
+export type SummaryResult = { summary: string; topic?: string; topicStatus?: TopicEnd };
 
-export async function summarizeTranscript(transcript: Transcript, generate: Generate): Promise<SummaryResult | undefined> {
+/** 要約の入力。テーマ名がばらつかないよう、これまでのテーマ名を添える（試用で「リスト」などが別テーマになった）。 */
+export function buildSummaryInput(transcript: Transcript, knownTopics: readonly string[] = []): string {
+  if (!knownTopics.length) return transcript.text;
+  return `## これまでのテーマ名（当てはまるならこの名前を使う）\n${knownTopics.join("、")}\n\n## 会話ログ\n${transcript.text}`;
+}
+
+/** 意味記憶と、エピソードに付いたテーマ名（新しい順、重複なし、最大10件）。 */
+export function knownTopicNames(state: MemoryState): string[] {
+  const names: string[] = [];
+  const add = (name: string | undefined) => {
+    if (name && !names.some((known) => known.toLowerCase() === name.toLowerCase())) names.push(name);
+  };
+  [...state.episodes].sort(byNewest).forEach(({ topic }) => add(topic));
+  state.semantic?.topics.forEach(({ name }) => add(name));
+  return names.slice(0, 10);
+}
+
+export async function summarizeTranscript(transcript: Transcript, generate: Generate, knownTopics: readonly string[] = []): Promise<SummaryResult | undefined> {
   try {
-    const output = await generate(transcript.text);
+    const output = await generate(buildSummaryInput(transcript, knownTopics));
     if (output === undefined) return undefined;
     const summary = normalizeSummary(output);
     if (summary === undefined) return undefined;
-    const topic = summary === NO_SUMMARY ? undefined : extractTopic(output);
-    return topic ? { summary, topic } : { summary };
+    const label = summary === NO_SUMMARY ? undefined : extractTopicLabel(output);
+    return label ? { summary, ...label } : { summary };
   } catch {
     return undefined;
   }
@@ -342,7 +376,8 @@ function isEpisode(value: unknown): value is Episode {
     && typeof entry.summary === "string"
     && typeof entry.summaryVersion === "number"
     && (entry.foldedRevision === undefined || typeof entry.foldedRevision === "number")
-    && (entry.topic === undefined || typeof entry.topic === "string");
+    && (entry.topic === undefined || typeof entry.topic === "string")
+    && (entry.topicStatus === undefined || entry.topicStatus === "一区切り" || entry.topicStatus === "見送り");
 }
 
 function readSemanticMemory(value: unknown): SemanticMemory | null | undefined {
@@ -549,9 +584,11 @@ export async function runMemoryMaintenance(options: RunMemoryOptions): Promise<R
   if (resetOutdatedSemantic(state)) await updateMemory(options.memoryPath, resetOutdatedSemantic);
 
   const candidates = selectSessionsToSummarize(listSessionFiles(options.sessionsDir), state, options.currentSessionFile);
+  const knownTopics = knownTopicNames(state);
   for (const { file, transcript } of candidates) {
     if (!isCurrent()) return result;
-    const made = await summarizeTranscript(transcript, options.summarize);
+    const made = await summarizeTranscript(transcript, options.summarize, knownTopics);
+    if (made?.topic && !knownTopics.some((name) => name.toLowerCase() === made.topic?.toLowerCase())) knownTopics.unshift(made.topic);
     if (made === undefined || !isCurrent()) continue;
     const episode: Episode = {
       sessionId: transcript.sessionId,
@@ -560,6 +597,7 @@ export async function runMemoryMaintenance(options: RunMemoryOptions): Promise<R
       summary: made.summary,
       summaryVersion: SUMMARY_VERSION,
       ...(made.topic ? { topic: made.topic } : {}),
+      ...(made.topicStatus ? { topicStatus: made.topicStatus } : {}),
     };
     if (await updateMemory(options.memoryPath, (latest) => upsertEpisode(latest, episode))) result.summarized += 1;
   }
@@ -590,7 +628,8 @@ export function formatMemoryPrompt(state: MemoryState | undefined, currentSessio
       && episode.sessionId !== currentSessionId && !Number.isNaN(Date.parse(episode.timestamp)))
     .sort(byNewest);
   if (recent.length) {
-    sections.push(["## 最近の学習（新しい順）", ...recent.map(({ timestamp, summary, topic }) => `- ${formatDate(timestamp)}: ${topic ? `【${topic}】` : ""}${summary}`)].join("\n"));
+    sections.push(["## 最近の学習（新しい順）", ...recent.map(({ timestamp, summary, topic, topicStatus }) =>
+      `- ${formatDate(timestamp)}: ${topic ? `【${topic}${topicStatus ? `・${topicStatus}` : ""}】` : ""}${summary}`)].join("\n"));
   }
   if (!sections.length) return "";
   return [...sections, MEMORY_GUIDANCE].join("\n\n");

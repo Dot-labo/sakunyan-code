@@ -7,7 +7,7 @@ import { containsSecret } from "./secrets.js";
 // 残すテーマ（最大5件）はプログラムが決める。モデルに任せると、学習中のテーマを捨てて見送ったテーマを残すことがあった（試用で確認）。
 
 /** 形や畳み込みの指示を変えたら上げる。版が違う意味記憶は作り直す。 */
-export const SEMANTIC_VERSION = 12;
+export const SEMANTIC_VERSION = 15;
 export const TOPIC_STATUSES = ["学習中", "一区切り", "見送り"] as const;
 export const MAX_TOPICS = 5;
 /** モデルには多めに書いてもらい、プログラムが MAX_TOPICS 件に絞る。 */
@@ -19,6 +19,8 @@ export const MAX_NOTE_CHARS = 60;
 export const MAX_SEMANTIC_CHARS = 800;
 
 export type TopicStatus = (typeof TOPIC_STATUSES)[number];
+/** 要約で付く、テーマを終わりにした・やめたという印。 */
+export type TopicEnd = "一区切り" | "見送り";
 /** lastStudied（最後に学んだ日、YYYY-MM-DD）はモデルではなくプログラムが付ける。 */
 export type Topic = { name: string; status: TopicStatus; progress: string; lastStudied?: string };
 export type SemanticContent = {
@@ -47,7 +49,7 @@ export const FOLD_SYSTEM_PROMPT = `あなたは、プログラミング学習者
 - 次にやることや予定は書かない（最近の記録に任せる）
 - 学習記録の【 】はテーマ名。新しく取り込む学習記録のテーマは、必ず topics に入れる
 - 今の全体像にあるテーマも省かずに書く（件数を減らすのはあとでプログラムが行う）
-- status は、そのテーマの最後の記録で決める。続けているなら「学習中」、終わりにすると言ったなら「一区切り」、やめると言ったなら「見送り」
+- status は、そのテーマの一番新しい記録の【 】に「一区切り」「見送り」があればそれ、なければ「学習中」にする（status はあとでプログラムがこの決まりで付け直す）
 - struggles には、利用者自身がわからなかった・まちがえたと記録にはっきり書かれた、学習内容（文法や考え方）のつまずきだけを書く
 - sakunyanの説明のまちがいで戸惑ったことや、記録から推測しただけのことは struggles に書かない
 - habits には、記録から分かる学び方（例: 自分で書いて確かめたい）だけを書く
@@ -144,7 +146,7 @@ export function isEmptySemantic(content: SemanticContent): boolean {
   return !content.topics.length && !content.struggles.length && !content.habits.length;
 }
 
-export type FoldEpisode = { timestamp: string; summary: string; topic?: string };
+export type FoldEpisode = { timestamp: string; summary: string; topic?: string; topicStatus?: TopicEnd };
 
 /** 畳み込みでモデルに渡す入力。今の全体像と、取り込む学習記録（古い順）。 */
 export function buildFoldInput(current: SemanticContent | undefined, episodes: readonly FoldEpisode[]): string {
@@ -154,7 +156,8 @@ export function buildFoldInput(current: SemanticContent | undefined, episodes: r
     JSON.stringify(now),
     "",
     "## 新しく取り込む学習記録（古い順）",
-    ...episodes.map(({ timestamp, summary, topic }) => `- ${timestamp.slice(0, 10)}: ${topic ? `【${topic}】` : ""}${summary}`),
+    ...episodes.map(({ timestamp, summary, topic, topicStatus }) =>
+      `- ${timestamp.slice(0, 10)}: ${topic ? `【${topic}${topicStatus ? `・${topicStatus}` : ""}】` : ""}${summary}`),
   ].join("\n");
 }
 
@@ -194,13 +197,15 @@ function progressFromSummary(summary: string): string {
   return end > 0 ? head.slice(0, end + 1) : head;
 }
 
-export type FoldedEpisode = { timestamp: string; summary: string; topic?: string };
+export type FoldedEpisode = { timestamp: string; summary: string; topic?: string; topicStatus?: TopicEnd };
 
 /**
  * 残すテーマをプログラムで決める。
  * - 前の全体像にあったのにモデルが書かなかったテーマは、前の内容で戻す（黙って消さない）
  * - 取り込んだ記録のテーマが入っていなければ、その記録の要約から1行作って入れる
  * - 最後に学んだ日を、記録の日付と前の全体像から付ける
+ * - 状態を、そのテーマの一番新しい記録の印（一区切り・見送り。なければ学習中）で付ける。
+ *   取り込む記録がないテーマは前の状態のまま。モデルの判断は、どちらもないときだけ使う（試用で状態がぶれた）
  * - 「学習中 → 一区切り → 見送り」、同じなら最後に学んだ日が新しい順に並べ、上から5件を残す
  */
 export function arrangeTopics(modelTopics: readonly Topic[], previous: readonly Topic[], folded: readonly FoldedEpisode[]): Topic[] {
@@ -216,6 +221,17 @@ export function arrangeTopics(modelTopics: readonly Topic[], previous: readonly 
     add({ name, status: "学習中", progress: progressFromSummary(episode.summary) });
   }
   for (const topic of topics) {
+    const latestEpisode = folded
+      .filter(({ topic: label }) => label && sameTopic(label, topic.name))
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+      .at(-1);
+    const before = previous.find(({ name }) => sameTopic(name, topic.name));
+    // 古い会話があとから要約されて畳み込まれることがある（要約は新しい順に作るため）。
+    // 前の全体像のほうが新しい記録をもとにしていれば、前の状態を使う（試用で、一区切りが学習中に戻った）。
+    const episodeDate = latestEpisode?.timestamp.slice(0, 10);
+    const beforeIsNewer = before?.lastStudied !== undefined && (episodeDate === undefined || before.lastStudied >= episodeDate);
+    if (before && (beforeIsNewer || !latestEpisode)) topic.status = before.status;
+    else if (latestEpisode) topic.status = latestEpisode.topicStatus ?? "学習中";
     const dates = [
       ...folded.filter(({ topic: label }) => label && sameTopic(label, topic.name)).map(({ timestamp }) => timestamp.slice(0, 10)),
       ...previous.filter(({ name }) => sameTopic(name, topic.name)).flatMap(({ lastStudied }) => (lastStudied ? [lastStudied] : [])),

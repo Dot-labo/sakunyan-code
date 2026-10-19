@@ -100,13 +100,18 @@ test("未要約と再開を先に、版だけが古いものはあとに（「�
   assert.deepEqual(selectSessionsToSummarize(files, state, undefined, 2).map(({ transcript }) => transcript.sessionId), ["resumed", "new"]);
 });
 
-test("要約を整える: 話し手の名前、文の終わりでの切り詰め、「なし」、秘密情報", () => {
+test("要約を整える: 話し手の名前、文の終わりでの切り詰め、「なし」、秘密情報", async () => {
   assert.equal(normalizeSummary("  リストを練習。\n次は辞書。  "), "リストを練習。 次は辞書。");
   assert.equal(normalizeSummary("利用者: for文を練習した。"), "for文を練習した。");
   assert.equal(normalizeSummary("【Python】for文を練習した。"), "for文を練習した。");
   assert.equal(extractTopic("【Python】for文を練習した。"), "Python");
   assert.equal(extractTopic("利用者: 【HTML/CSS】h1を書いた。"), "HTML/CSS");
   assert.equal(extractTopic("for文を練習した。"), undefined);
+  const { extractTopicLabel } = await import("../dist/memory.js");
+  assert.deepEqual(extractTopicLabel("【Scratch・一区切り】ゲームを完成させた。"), { topic: "Scratch", topicStatus: "一区切り" });
+  assert.deepEqual(extractTopicLabel("【JavaScript・見送り】やめた。"), { topic: "JavaScript", topicStatus: "見送り" });
+  assert.deepEqual(extractTopicLabel("【HTML・CSS】h1を書いた。"), { topic: "HTML・CSS" });
+  assert.equal(normalizeSummary("【Scratch・一区切り】ゲームを完成させた。"), "ゲームを完成させた。");
   assert.equal([...normalizeSummary("あ".repeat(300))].length, MAX_SUMMARY_CHARS);
   assert.equal(normalizeSummary(`${"い".repeat(100)}。${"う".repeat(100)}。`), `${"い".repeat(100)}。`);
   assert.equal(normalizeSummary("なし。"), NO_SUMMARY);
@@ -180,6 +185,16 @@ test("注入は意味記憶→最近の学習（新しい順）→確かめの�
   assert.ok(prompt.endsWith(MEMORY_GUIDANCE));
   assert.doesNotMatch(prompt, /なし|currentの要約|foldedの要約/);
   assert.equal(formatMemoryPrompt(emptyMemory(), undefined), "");
+});
+
+test("要約の入力に、これまでのテーマ名を新しい順に添える", async () => {
+  const { buildSummaryInput, knownTopicNames } = await import("../dist/memory.js");
+  const state = { ...emptyMemory(), episodes: [episode("a", 1, { topic: "Python" }), episode("b", 3, { topic: "Git" }), episode("c", 2, { topic: "python" })],
+    semantic: { semanticVersion: SEMANTIC_VERSION, revision: 1, updatedAt: "x", topics: [{ name: "Scratch", status: "一区切り", progress: "ゲーム" }], struggles: [], habits: [] } };
+  assert.deepEqual(knownTopicNames(state), ["Git", "python", "Scratch"]);
+  const transcript = { sessionId: "s", lastTimestamp: "", userMessageCount: 2, assistantMessageCount: 1, text: "利用者: こんにちは" };
+  assert.equal(buildSummaryInput(transcript), "利用者: こんにちは");
+  assert.equal(buildSummaryInput(transcript, ["Git", "Python"]), "## これまでのテーマ名（当てはまるならこの名前を使う）\nGit、Python\n\n## 会話ログ\n利用者: こんにちは");
 });
 
 test("要約して保存し、「なし」は作り直さず、失敗したセッションは次回に再試行する", async () => {

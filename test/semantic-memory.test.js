@@ -242,3 +242,34 @@ test("残すテーマはプログラムが決める: 前のテーマを戻し、
   ]);
   assert.equal(topics.find(({ name }) => name === "HTML/CSS").progress, "背景色");
 });
+
+test("状態はプログラムが決める: 一番新しい記録の印、なければ前の状態、どちらもなければモデルの判断", async () => {
+  const { arrangeTopics } = await import("../dist/semantic-memory.js");
+  const previous = [{ name: "Git", status: "学習中", progress: "commit", lastStudied: "2026-09-27" }];
+  // モデルは Scratch を「学習中」、Git を「一区切り」とまちがえた。
+  const model = [
+    { name: "Scratch", status: "学習中", progress: "ゲーム" },
+    { name: "Git", status: "一区切り", progress: "commit" },
+    { name: "JavaScript", status: "学習中", progress: "console.log" },
+    { name: "Ruby", status: "見送り", progress: "少し見た" },
+  ];
+  const folded = [
+    { timestamp: "2026-09-01T10:00:00.000Z", summary: "ネコを動かした。", topic: "Scratch" },
+    { timestamp: "2026-09-03T10:00:00.000Z", summary: "ゲームを完成。", topic: "Scratch", topicStatus: "一区切り" },
+    { timestamp: "2026-09-10T10:00:00.000Z", summary: "やめた。", topic: "JavaScript", topicStatus: "見送り" },
+  ];
+  const status = Object.fromEntries(arrangeTopics(model, previous, folded).map(({ name, status }) => [name, status]));
+  assert.deepEqual(status, { Scratch: "一区切り", Git: "学習中", JavaScript: "見送り", Ruby: "見送り" });
+});
+
+test("古い会話があとから畳み込まれても、新しい記録で決まった状態を戻さない", async () => {
+  const { arrangeTopics } = await import("../dist/semantic-memory.js");
+  const previous = [{ name: "Scratch", status: "一区切り", progress: "ゲームを完成", lastStudied: "2026-09-03" }];
+  const model = [{ name: "Scratch", status: "学習中", progress: "ネコとゲーム" }];
+  const folded = [{ timestamp: "2026-09-01T10:00:00.000Z", summary: "ネコを動かした。", topic: "Scratch" }];
+  const [scratch] = arrangeTopics(model, previous, folded);
+  assert.deepEqual([scratch.status, scratch.lastStudied], ["一区切り", "2026-09-03"]);
+  // 新しい記録が来たら、そちらで決める（再開した）。
+  const [resumed] = arrangeTopics(model, previous, [{ timestamp: "2026-10-01T10:00:00.000Z", summary: "また始めた。", topic: "Scratch" }]);
+  assert.deepEqual([resumed.status, resumed.lastStudied], ["学習中", "2026-10-01"]);
+});
