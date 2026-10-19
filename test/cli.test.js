@@ -394,12 +394,10 @@ test("APIキー入力後に接続確認を再試行し、入力値を表示す�
       notify() {},
       custom: async (factory) => {
         component = factory({}, theme, {}, (value) => value);
-        const instructions = component.render(80).join("\n");
-        assert.match(instructions, /APIキーの取得方法/);
-        assert.match(instructions, /https:\/\/portal\.dot-labo\.jp\/home\/openrouter-key/);
-        assert.match(instructions, /https:\/\/openrouter\.ai\/settings\/keys/);
-        assert.match(instructions, /自分専用のOpenRouterアカウントが必要です/);
-        assert.match(instructions, /先生からAPIキーを受け取る/);
+        const instructions = component.render(200).join("\n");
+        assert.match(instructions, /ドットラボポータルで受け取れるよ：https:\/\/portal\.dot-labo\.jp\/home\/openrouter-key/);
+        assert.match(instructions, /（ほかの方法：先生からもらう ／ OpenRouterで作る https:\/\/openrouter\.ai\/settings\/keys）/);
+        assert.equal(component.render(200).length, 3);
         assert.doesNotMatch(instructions, /\n\n|teacher-secret/);
         assert.match(component.render(80).at(-1), /APIキーを貼り付け（Enterで確定・Escで終了）👉/);
         assert.match(component.render(40).at(-1), /Enter:確定 Esc:終了 👉/);
@@ -418,7 +416,8 @@ test("APIキー入力後に接続確認を再試行し、入力値を表示す�
   await handlers.get("session_start")({}, context);
   assert.equal(attempts, 2);
   assert.ok(widgets.some((status) => status.includes("接続を確認中")));
-  assert.ok(widgets.some((status) => status.includes("接続確認NG　OpenRouter APIキーが必要です。")));
+  assert.ok(widgets.some((status) => status.includes("はじめに、APIキーを設定しよう")));
+  assert.ok(!widgets.some((status) => status.includes("接続確認NG")));
   assert.ok(widgets.some((status) => status.includes("接続確認OK")));
   assert.ok(!widgets.some((status) => status.includes("インターネットにつながらない")));
   } finally {
@@ -479,9 +478,7 @@ test("sakunyan-codeの更新案内は新しいバージョンがあるときだ�
   assert.equal(isUpdateAvailable("latest", "0.1.7"), false);
   assert.equal(isUpdateAvailable("0.2.0", "unknown"), false);
 
-  assert.equal(messages.update.title, "新しいバージョンがあるよ！");
-  assert.match(messages.update.versionLine("0.1.7", "0.2.0"), /0\.1\.7/);
-  assert.match(messages.update.versionLine("0.1.7", "0.2.0"), /0\.2\.0/);
+  assert.match(messages.update.notice("0.2.0"), /新バージョン v0\.2\.0 が出たよ/);
   assert.equal(messages.update.command, "npm install -g @dotlabo/sakunyan-code@latest");
 });
 
@@ -506,7 +503,7 @@ test("npmのバージョン取得に失敗した場合はundefinedを返す", as
   }
 });
 
-test("APIキー未設定でも更新確認を始め、新しいバージョンがあるときだけwidgetを表示する", async () => {
+test("更新確認は起動と同時に始め、お知らせはAPIキーの設定が済んで新しいバージョンがあるときだけ1行で出す", async () => {
   const handlers = new Map();
   sakunyanExtension({
     on: (event, handler) => handlers.set(event, handler),
@@ -537,28 +534,36 @@ test("APIキー未設定でも更新確認を始め、新しいバージョン�
   const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
   const previousFetch = globalThis.fetch;
   try {
-    globalThis.fetch = async () => ({ ok: true, json: async () => ({ version: "99.0.0" }) });
+    const requested = [];
+    globalThis.fetch = async (url) => {
+      requested.push(String(url));
+      return { ok: true, json: async () => ({ version: "99.0.0" }) };
+    };
+    // APIキーの入力画面のあいだは、更新の確認は始めるが、お知らせは出さない。
     const noApiKey = makeContext();
     noApiKey.modelRegistry.find = () => undefined;
-    noApiKey.ui.custom = async () => undefined;
+    noApiKey.ui.custom = async () => {
+      await settle();
+      assert.ok(requested.some((url) => url.includes("registry.npmjs.org")));
+      assert.equal(widgets.has("sakunyan-update"), false);
+      return undefined;
+    };
     noApiKey.ui.notify = () => {};
     noApiKey.shutdown = () => {};
     await handlers.get("session_start")({}, noApiKey);
     await settle();
-    assert.equal(typeof widgets.get("sakunyan-update"), "function");
+    assert.equal(widgets.has("sakunyan-update"), false);
 
     widgets.clear();
     await handlers.get("session_start")({}, makeContext());
     await settle();
     const widgetFactory = widgets.get("sakunyan-update");
     assert.equal(typeof widgetFactory, "function");
-    const notice = widgetFactory({}, theme).render(80).join("\n");
-    assert.match(notice, /─{10,}/);
-    assert.match(notice, /新しいバージョンがあるよ/);
-    assert.match(notice, /99\.0\.0/);
-    assert.match(notice, /npm install -g @dotlabo\/sakunyan-code@latest/);
-    assert.equal(notice.split("\n").at(0), "");
-    assert.equal(notice.split("\n").at(-1), "");
+    const notice = widgetFactory({}, theme).render(100);
+    assert.equal(notice.length, 1);
+    assert.doesNotMatch(notice[0], /─/);
+    assert.match(notice[0], /新バージョン v99\.0\.0 が出たよ/);
+    assert.match(notice[0], /npm install -g @dotlabo\/sakunyan-code@latest/);
 
     widgets.clear();
     globalThis.fetch = async () => ({ ok: true, json: async () => ({ version: SAKUNYAN_VERSION }) });
@@ -656,7 +661,7 @@ test("インターネットにつながらないときは、APIキーではな�
     assert.ok(requested.includes("http://127.0.0.1:9/v1"));
     const failure = widgets.at(-1);
     assert.match(failure[0], /接続確認NG　インターネットにつながらないみたい。/);
-    assert.doesNotMatch(failure.join("\n"), /APIキーが必要です/);
+    assert.doesNotMatch(failure.join("\n"), /APIキーを設定/);
     assert.match(failure.join("\n"), /Wi-Fi/);
     assert.match(failure.join("\n"), /先生に聞いてね/);
     assert.match(failure.join("\n"), /もう一度 sakunyan を起動/);

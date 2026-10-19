@@ -1,6 +1,7 @@
-import { DynamicBorder, getAgentDir, type ExtensionAPI, type ExtensionContext, type Theme } from "@earendil-works/pi-coding-agent";
-import { matchesKey, truncateToWidth, type TUI } from "@earendil-works/pi-tui";
+import { getAgentDir, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { matchesKey, truncateToWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { messages } from "./messages.js";
 import { MODEL_ID, MODEL_PROVIDER } from "./model-config.js";
@@ -10,7 +11,8 @@ import { canReachServer } from "./network-check.js";
 import { fetchLatestSakunyanVersion, isUpdateAvailable } from "./update-check.js";
 import { SAKUNYAN_VERSION } from "./version.js";
 import { formatRuntimeOS, getRuntimeOS } from "./runtime-os.js";
-import { formatTipLines, getTipOS, selectTip } from "./tips.js";
+import { getTipOS, selectTip } from "./tips.js";
+import { formatFooterLines, formatHeaderLines, formatUpdateNoticeLines, type FooterState as ScreenFooterState } from "./startup-display.js";
 import {
   fetchKeyStatus,
   KEY_STATUS_BAR_WIDTH,
@@ -24,18 +26,27 @@ const probeMessage = "接続確認です。短く『準備できたよ』とだ�
 const probeTimeoutMs = 15_000;
 const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-function showSetupMessage(ctx: ExtensionContext, message: string, color: "accent" | "success" | "error" = "accent") {
+function showSetupMessage(ctx: ExtensionContext, message: string, color: "accent" | "success" | "warning" | "error" = "accent") {
   const text = ctx.ui.theme.fg(color, message);
   ctx.ui.setWidget("sakunyan-setup", [text], { placement: "aboveEditor" });
 }
 
+async function hasSavedApiKey(ctx: ExtensionContext): Promise<boolean> {
+  try {
+    return Boolean(await ctx.modelRegistry.getApiKeyForProvider(MODEL_PROVIDER));
+  } catch {
+    return false;
+  }
+}
+
 // 接続確認に失敗したとき、APIキーの問題か、インターネットの問題かを分けて知らせる。
+// APIキーがまだ無いのは、初めて使うときのふつうの状態なので、エラーに見えない言い方で設定を案内する。
 // サーバーまで通信が届かないときは、APIキーを入れ直しても直らないので、次にやることを出す。
 async function showProbeFailure(ctx: ExtensionContext): Promise<void> {
-  const headline = `${messages.setup.checkingNg}　${messages.setup.requestKey}`;
   const serverUrl = ctx.modelRegistry.find(MODEL_PROVIDER, MODEL_ID)?.baseUrl;
   if (await canReachServer(serverUrl)) {
-    showSetupMessage(ctx, headline, "error");
+    if (await hasSavedApiKey(ctx)) showSetupMessage(ctx, messages.setup.keyNotWorking, "warning");
+    else showSetupMessage(ctx, messages.setup.needKey, "accent");
     return;
   }
   ctx.ui.setWidget(
@@ -79,7 +90,9 @@ function requestApiKey(ctx: ExtensionContext): Promise<string | undefined> {
 
     return {
       render: (width: number) => [
-        ...messages.setup.keySources.map((line) => truncateToWidth(theme.fg("text", line), width, "")),
+        // 取り方のURLが切れないように、幅に合わせて折り返す。
+        ...messages.setup.keySources.flatMap((line) => wrapTextWithAnsi(theme.fg("text", line), Math.max(1, width))
+          .map((wrapped) => truncateToWidth(wrapped, width, ""))),
         truncateToWidth(theme.fg("accent", `${width < 60 ? messages.setup.inputPromptCompact : messages.setup.inputPrompt} ${value}`), width, ""),
       ],
       handleInput(data: string) {
@@ -159,15 +172,16 @@ export function saveApiKey(apiKey: string, authPath = join(getAgentDir(), "auth.
   }
 }
 
-async function setupModel(ctx: ExtensionContext): Promise<boolean> {
+async function setupModel(ctx: ExtensionContext, onKeyRequired: () => void = () => {}): Promise<boolean> {
   ctx.ui.setWorkingMessage(messages.setup.checking);
   if (await canUseModel(ctx)) {
     showSetupMessage(ctx, messages.setup.checkingOk, "success");
     return true;
   }
 
+  onKeyRequired();
   await showProbeFailure(ctx);
-  ctx.ui.setWorkingMessage(messages.setup.requestKey);
+  ctx.ui.setWorkingMessage(messages.setup.needKey);
 
   while (true) {
     const apiKey = await requestApiKey(ctx);
@@ -306,44 +320,69 @@ function installKeyStatusDisplay(ctx: ExtensionContext): KeyStatusDisplay {
   return { refresh: () => void refresh(), dispose };
 }
 
-function updateNoticeWidget(latestVersion: string) {
-  return (_tui: TUI, theme: Theme) => ({
-    render: (width: number): string[] => {
-      const border = new DynamicBorder((text) => theme.fg("warning", text)).render(width).at(0) ?? "";
-      const indent = (line: string) => truncateToWidth(` ${line}`, width, "");
-      return [
-        "",
-        border,
-        indent(theme.fg("warning", theme.bold(messages.update.title))),
-        indent(theme.fg("muted", messages.update.versionLine(SAKUNYAN_VERSION, latestVersion))),
-        indent(theme.fg("muted", messages.update.instruction)),
-        indent(theme.fg("accent", messages.update.command)),
-        border,
-        "",
-      ];
-    },
-    invalidate() {},
-  });
+function showUpdateNotice(ctx: ExtensionContext, latestVersion: string): void {
+  try {
+    ctx.ui.setWidget("sakunyan-update", (_tui, theme) => ({
+      render: (width: number): string[] => formatUpdateNoticeLines(latestVersion, theme, width),
+      invalidate() {},
+    }), { placement: "aboveEditor" });
+  } catch {
+    // 終了した後のctxなどで出せないときは、お知らせを出さない。
+  }
 }
 
-async function checkForUpdate(ctx: ExtensionContext): Promise<void> {
+// 更新の確認は起動と同時に始めるが、お知らせはAPIキーの設定が済んでから出す。
+async function findUpdate(): Promise<string | undefined> {
   try {
     const latestVersion = await fetchLatestSakunyanVersion();
-    if (!latestVersion || !isUpdateAvailable(latestVersion, SAKUNYAN_VERSION)) return;
-    ctx.ui.setWidget("sakunyan-update", updateNoticeWidget(latestVersion), { placement: "aboveEditor" });
+    return latestVersion && isUpdateAvailable(latestVersion, SAKUNYAN_VERSION) ? latestVersion : undefined;
   } catch {
-    return;
+    return undefined;
   }
+}
+
+function readFooterState(
+  ctx: ExtensionContext,
+  footerData: { getExtensionStatuses(): ReadonlyMap<string, string>; getGitBranch?(): string | null },
+  ready: boolean,
+): ScreenFooterState {
+  let conversationStarted = false;
+  let usage: ReturnType<ExtensionContext["getContextUsage"]>;
+  let model: ExtensionContext["model"];
+  try {
+    conversationStarted = ctx.sessionManager.getEntries().some((entry) =>
+      entry.type === "message" && (entry.message.role === "user" || entry.message.role === "assistant"));
+    usage = ctx.getContextUsage();
+    model = ctx.model;
+  } catch {
+    // 終了した後のctxなどで読めないときは、会話の量を出さない。
+  }
+  return {
+    ready,
+    conversationStarted,
+    cwd: ctx.cwd,
+    home: homedir(),
+    branch: footerData.getGitBranch?.() ?? null,
+    contextPercent: usage ? usage.percent : 0,
+    contextWindow: usage?.contextWindow ?? model?.contextWindow ?? 0,
+    modelId: model?.id,
+    statuses: [...footerData.getExtensionStatuses().entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, text]) => text),
+  };
 }
 
 // ヒントは起動ごとに1件だけ選び、画面のヘッダーにだけ表示する（system promptには入れない）。
 // 表示するのは起動したときの1回だけ。/new や /resume などでヘッダーを描き直すときは、ヒントを出さない。
+// APIキーの設定が済むまでは、設定に集中できるように出さない。
 const startupTip = selectTip(getTipOS());
 
 export function sakunyanExtension(pi: ExtensionAPI): void {
   let currentMode = getDefaultMode();
   // ctxはイベントごとに別オブジェクトなので、表示の寿命は拡張のセッションで管理する。
   let keyStatusDisplay: KeyStatusDisplay | undefined;
+  // 起動・/new などで始まった、いまの画面。終わった画面の非同期の処理が、表示を書きかえないようにする。
+  let currentSession: object | undefined;
   const runtimeOS = getRuntimeOS();
   let activity: {
     color: "accent" | "success";
@@ -397,25 +436,56 @@ export function sakunyanExtension(pi: ExtensionAPI): void {
     pi.setActiveTools([...currentMode.tools]);
     activity = { color: "success", icon: messages.ui.idleIcon, text: messages.ui.waiting };
 
+    // APIキーの設定が済むまでは、ヒント・更新のお知らせ・会話の量などを出さない。
+    // 保存したキーがあれば、接続確認を待つ間に読めるように、はじめから出す。
+    // キーが使えず入力画面になったら、設定に集中できるように、いったん隠す。
+    const session = {};
+    currentSession = session;
+    const isCurrent = () => currentSession === session;
+    let phase: "checking" | "keyRequired" | "done" = "checking";
+    let hasSavedKey = false;
+    let latestVersion: string | undefined;
+    let updateShown = false;
+    const isReady = () => phase === "done" || (phase === "checking" && hasSavedKey);
+    const refreshUpdateNotice = () => {
+      if (!isCurrent()) return;
+      if (isReady() && latestVersion && !updateShown) {
+        showUpdateNotice(ctx, latestVersion);
+        updateShown = true;
+      } else if (!isReady() && updateShown) {
+        ctx.ui.setWidget("sakunyan-update", undefined);
+        updateShown = false;
+      }
+    };
+    const home = homedir();
     ctx.ui.setHeader((_tui, theme) => ({
-      // 幅を超える行があるとTUIが異常終了するため、ロゴなどは幅で切り詰め、ヒントは折り返す。
-      render: (width?: number) => {
-        const fit = (line: string) => (width !== undefined && width > 0 ? truncateToWidth(line, width, "") : line);
-        return [
-          ...messages.ui.logo.map((line: string) => fit(theme.fg("accent", line))),
-          fit(theme.fg("success", theme.bold(messages.ui.header))),
-          fit(`${theme.fg("muted", messages.ui.workingDirectory)} ${theme.fg("accent", `📁 ${ctx.cwd}`)}`),
-          fit(`${theme.fg("muted", messages.ui.runtimeOS)} ${theme.fg("accent", formatRuntimeOS(runtimeOS))}`),
-          // ヒントは前後を1行あけて、起動の待ち時間（接続確認の間）に目に入りやすくする。
-          ...(tip ? [""] : []),
-          ...formatTipLines(tip, width).map((line) => theme.fg("muted", line)),
-          "",
-        ];
-      },
+      render: (width?: number) => formatHeaderLines(
+        { cwd: ctx.cwd, home, runtimeOS: formatRuntimeOS(runtimeOS), ready: isReady(), tip },
+        theme,
+        width,
+      ),
       invalidate() {},
     }));
-    void checkForUpdate(ctx);
-    if (await setupModel(ctx)) {
+    ctx.ui.setFooter?.((_tui, theme, footerData) => ({
+      render: (width: number) => formatFooterLines(readFooterState(ctx, footerData, isReady()), theme, width),
+      invalidate() {},
+    }));
+    void findUpdate().then((version) => {
+      latestVersion = version;
+      refreshUpdateNotice();
+    });
+    // 接続確認は待たせずに始める。キーの有無は、分かりしだい表示に反映する。
+    void hasSavedApiKey(ctx).then((saved) => {
+      hasSavedKey = saved;
+      refreshUpdateNotice();
+    });
+    const keyRequired = () => {
+      phase = "keyRequired";
+      refreshUpdateNotice();
+    };
+    if (await setupModel(ctx, keyRequired)) {
+      phase = "done";
+      refreshUpdateNotice();
       keyStatusDisplay = installKeyStatusDisplay(ctx);
       renderStatus(ctx);
       ctx.ui.setWorkingMessage(messages.ui.thinking);
@@ -423,6 +493,7 @@ export function sakunyanExtension(pi: ExtensionAPI): void {
   });
 
   pi.on("session_shutdown", () => {
+    currentSession = undefined;
     keyStatusDisplay?.dispose();
     keyStatusDisplay = undefined;
   });

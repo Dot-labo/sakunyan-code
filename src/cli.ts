@@ -9,6 +9,7 @@ import { messages } from "./messages.js";
 import { MODEL_ARGS } from "./model-config.js";
 import { getDefaultMode } from "./modes.js";
 import { MIN_NODE_VERSION, supportsNodeVersion } from "./node-version.js";
+import { createStartupProgress } from "./startup-progress.js";
 import { SAKUNYAN_VERSION } from "./version.js";
 
 process.env.PI_CODING_AGENT = "true";
@@ -78,11 +79,13 @@ async function run(): Promise<void> {
       process.stdin.isTTY && process.stdout.isTTY && process.stderr.isTTY &&
       !args.includes("--version") && !args.includes("--help"),
     );
-    if (showStartup) process.stderr.write("🐾 さくにゃんを起動中…\n");
+    // 準備中の2行は、画面（TUI）を出す直前に消す。
+    const progress = createStartupProgress((text) => process.stderr.write(text), showStartup);
+    progress.show(messages.ui.starting);
 
     try {
       const { runSakunyan } = await import("./runtime.js");
-      if (showStartup) process.stderr.write("🐾 設定と画面を準備中…\n");
+      progress.show(messages.ui.preparing);
       await runSakunyan(
         [
           ...args,
@@ -95,6 +98,7 @@ async function run(): Promise<void> {
           "--tools",
           getDefaultMode().tools.join(","),
         ],
+        { beforeInteractive: () => progress.clear() },
       );
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);

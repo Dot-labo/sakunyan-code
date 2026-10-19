@@ -48,7 +48,12 @@ export async function createSakunyanRuntime(args: Args, sessionManager: SessionM
   return createAgentSessionRuntime(createRuntime, { cwd: sessionManager.getCwd(), agentDir, sessionManager });
 }
 
-export async function runSakunyan(args: string[]): Promise<void> {
+export type RunSakunyanOptions = {
+  /** 画面（TUI）を出す直前に呼ぶ。起動中の案内を消すのに使う。 */
+  beforeInteractive?: () => void;
+};
+
+export async function runSakunyan(args: string[], options: RunSakunyanOptions = {}): Promise<void> {
   const parsed = parseArgs(args);
   if (parsed.offline) process.env.PI_OFFLINE = "1";
   if (parsed.version) { process.stdout.write(`${VERSION}\n`); return; }
@@ -119,6 +124,7 @@ export async function runSakunyan(args: string[]): Promise<void> {
         messages: messages.slice(1), initialImages,
       });
     } else {
+      options.beforeInteractive?.();
       await new InteractiveMode(runtime, {
         ...(initialMessage ? { initialMessage } : {}), initialImages, initialMessages: messages.slice(1),
         ...(parsed.verbose !== undefined ? { verbose: parsed.verbose } : {}),

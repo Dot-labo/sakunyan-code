@@ -16,8 +16,11 @@ export function installCommand(platform: string = process.platform): string {
 export const messages = {
   ui: {
     logo: SAKUNYAN_LOGO,
+    starting: "🐾 さくにゃんを起動中…",
+    preparing: "🐾 設定と画面を準備中…",
     header: `sakunyan code (v${SAKUNYAN_VERSION})へようこそ！`,
     workingDirectory: "作業フォルダ：",
+    homeDirectoryNotice: "🏠 ホームのフォルダで起動したよ。作業用のフォルダを作って、そこで起動すると安心だよ。",
     runtimeOS: "ユーザーの環境：",
     idleIcon: "🐱",
     workingIcon: "🐈",
@@ -38,12 +41,14 @@ export const messages = {
     loading: "取得中…",
     unavailable: "取得できません",
     unlimited: "上限なし",
+    conversationAmount: "💬 会話の量",
   },
   setup: {
     checking: "接続を確認中",
     checkingOk: "接続確認OK",
     checkingNg: "接続確認NG",
-    requestKey: "OpenRouter APIキーが必要です。",
+    needKey: "🔑 はじめに、APIキーを設定しよう！",
+    keyNotWorking: "🔑 今のAPIキーでは、つながらなかったよ。新しいAPIキーを設定してね。",
     networkUnreachable: "インターネットにつながらないみたい。",
     networkNextSteps: [
       "・Wi-Fi（インターネット）につながっているか確認してね。",
@@ -51,11 +56,8 @@ export const messages = {
       "・つながったら、Escで終了して、もう一度 sakunyan を起動してね。",
     ],
     keySources: [
-      "APIキーの取得方法",
-      "1. ポータルサイトから：https://portal.dot-labo.jp/home/openrouter-key",
-      "2. OpenRouterから：https://openrouter.ai/settings/keys",
-      "   ※自分専用のOpenRouterアカウントが必要です",
-      "3. 先生からAPIキーを受け取る",
+      "APIキーは、ドットラボポータルで受け取れるよ：https://portal.dot-labo.jp/home/openrouter-key",
+      "（ほかの方法：先生からもらう ／ OpenRouterで作る https://openrouter.ai/settings/keys）",
     ],
     inputPrompt: "🔑 APIキーを貼り付け（Enterで確定・Escで終了）👉",
     inputPromptCompact: "🔑 Enter:確定 Esc:終了 👉",
@@ -64,10 +66,7 @@ export const messages = {
     cancelled: "APIキーの設定をキャンセルしました。",
   },
   update: {
-    title: "新しいバージョンがあるよ！",
-    versionLine: (current: string, latest: string): string =>
-      `🐈 今のバージョン v${current} → 新しいバージョン v${latest}`,
-    instruction: "終了してから、ターミナルで次のコマンドを実行してね：",
+    notice: (latest: string): string => `🆕 新バージョン v${latest} が出たよ。終了してから：`,
     command: installCommand(),
   },
   unsupportedNodeVersion: (current: string, required: string, color = false) => `${paint("1;31", "❌ Node.jsのバージョンが古いため、sakunyanを起動できません。", color)}
