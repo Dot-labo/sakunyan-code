@@ -1,0 +1,83 @@
+name: Publish npm
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.repository == 'Dot-labo/sakunyan-code' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm install --global npm@11.19.0
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - name: Pack the tested build
+        run: |
+          mkdir -p release
+          npm pack --ignore-scripts --pack-destination release
+      - name: Smoke test the installed tarball
+        shell: bash
+        run: |
+          set -euo pipefail
+          tarball=$(realpath release/*.tgz)
+          smoke="$RUNNER_TEMP/sakunyan-smoke"
+          mkdir -p "$smoke/home"
+          npm install --prefix "$smoke" --ignore-scripts --no-audit --no-fund --package-lock=false "$tarball"
+          export HOME="$smoke/home" USERPROFILE="$smoke/home"
+          expected=$(node -p "require('./package.json').version")
+          actual=$("$smoke/node_modules/.bin/sakunyan" --version)
+          test "$actual" = "$expected"
+          "$smoke/node_modules/.bin/sakunyan" --help > "$smoke/help.txt"
+          grep -F 'sakunyan' "$smoke/help.txt"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: npm-package
+          path: release/*.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: verify
+    if: github.repository == 'Dot-labo/sakunyan-code' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm install --global npm@11.19.0
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: npm-package
+          path: release
+      - name: Check registry version immediately before publishing
+        id: version
+        run: node scripts/publish-check.mjs >> "$GITHUB_OUTPUT"
+      - name: Publish the verified tarball using trusted publishing
+        if: steps.version.outputs.publish == 'true'
+        run: npm publish ./release/*.tgz --ignore-scripts --access public --tag latest --provenance --registry=https://registry.npmjs.org
