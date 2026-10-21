@@ -1,6 +1,6 @@
 ## 0. 前提
 
-- [ ] 0.1 `secure-mode-tool-defaults` をアーカイブし、`openspec/specs/mode-tool-permissions/` と更新後の `fixed-pi-runtime` があることを確認する
+- [x] 0.1 `secure-mode-tool-defaults` をアーカイブし、`openspec/specs/mode-tool-permissions/` と更新後の `fixed-pi-runtime` があることを確認する
 
 ## 1. 依存
 
