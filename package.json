@@ -29,9 +29,11 @@
     "typescript": "^5.7.0"
   },
   "dependencies": {
+    "@earendil-works/pi-ai": "0.84.2",
     "@earendil-works/pi-coding-agent": "0.84.2",
     "@earendil-works/pi-tui": "0.84.2",
     "figlet": "^1.11.4",
+    "pi-memory": "0.4.2",
     "proper-lockfile": "4.1.2"
   }
 }

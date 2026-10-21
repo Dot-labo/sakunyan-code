@@ -15,6 +15,12 @@ import { detectRuntimeOS, formatRuntimeOS, getRuntimeOS } from "../dist/runtime-
 import { fetchLatestSakunyanVersion, isUpdateAvailable } from "../dist/update-check.js";
 import { SAKUNYAN_VERSION } from "../dist/version.js";
 
+const readOnlyAndMemoryTools = [
+  "read", "grep", "find", "ls",
+  "memory_write", "memory_read", "memory_forget", "memory_restore",
+  "scratchpad", "memory_search", "memory_status",
+];
+
 const welcomePattern = new RegExp(
   `sakunyan code \\(v${SAKUNYAN_VERSION.replace(/\./g, "\\.")}\\)へようこそ`,
 );
@@ -28,7 +34,7 @@ test("対象フォルダを必須にする", async () => {
   assert.match(messages.unsupportedNodeVersion("22.14.0", "22.19.0"), /node --version/);
   assert.match(getDefaultMode().prompt, /子どもにも理解できる言葉/);
   assert.match(getDefaultMode().prompt, /Gitを含むコマンドは自分で実行せず/);
-  assert.deepEqual(getDefaultMode().tools, ["read", "grep", "find", "ls"]);
+  assert.deepEqual(getDefaultMode().tools, readOnlyAndMemoryTools);
   assert.deepEqual(MODEL_ARGS, ["--provider", MODEL_PROVIDER, "--model", MODEL_REFERENCE]);
 
   const missing = run();
@@ -141,7 +147,7 @@ test("応答モードを選択し、次のターンへプロンプトを適用�
   assert.ok(SAKUNYAN_MODES.every((mode) => [mode.id, mode.name, mode.description, mode.notice, mode.prompt]
     .every((value) => value.trim().length > 0)));
   assert.ok(SAKUNYAN_MODES.every((mode) => mode.tools.length > 0 && mode.tools.every((tool) =>
-    ["read", "grep", "find", "ls"].includes(tool))));
+    readOnlyAndMemoryTools.includes(tool))));
   assert.equal(getDefaultMode().id, DEFAULT_MODE_ID);
   assert.match(getDefaultMode().name, /[ぁ-んァ-ヶ一-龠]/);
 
@@ -264,7 +270,7 @@ test("チューターモードは読み取りだけで、手がかりを4段で�
   const tutor = SAKUNYAN_MODES.find(({ id }) => id === "tutor");
   const advisor = SAKUNYAN_MODES.find(({ id }) => id === "advisor");
   // 使えるツールは、アドバイスモードと同じ読み取りだけ。
-  assert.deepEqual([...tutor.tools], ["read", "grep", "find", "ls"]);
+  assert.deepEqual([...tutor.tools], readOnlyAndMemoryTools);
   assert.deepEqual([...tutor.tools], [...advisor.tools]);
   assert.equal(tutor.description, "自分で考えて作れるように、ヒントを少しずつ出します。");
   assert.equal(tutor.notice, "すぐに答えを出さないことがあります。ファイルの変更などは行いません。");
@@ -295,7 +301,7 @@ test("アドバイスモードの定義は変わらず、大阪弁モードは�
   assert.equal(advisor.name, "アドバイスモード");
   assert.equal(advisor.description, "一緒に調べながら、考え方や手順を分かりやすく説明します。");
   assert.equal(advisor.notice, "ファイルの変更などは行わず、必要な操作は自分で実行できるように案内します。");
-  assert.deepEqual([...advisor.tools], ["read", "grep", "find", "ls"]);
+  assert.deepEqual([...advisor.tools], readOnlyAndMemoryTools);
   // 指示文は、チューターモードを足す前（0.1.17）と1文字も変わらない。
   assert.equal(
     createHash("sha256").update(advisor.prompt).digest("hex"),
