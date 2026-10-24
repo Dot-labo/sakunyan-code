@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
+import { getDefaultMode } from "../dist/modes.js";
+
+// sakunyan's own dependency is the only extension loaded from a file.
+const piMemoryExtension = realpathSync(resolve("node_modules/pi-memory/index.ts"));
 
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), "sakunyan-project-inputs-"));
@@ -20,14 +24,14 @@ function fixture(t) {
   put(join(project, "target.txt"), "TARGET_CONTENT");
   const env = { ...process.env, HOME: home, USERPROFILE: home, TERM: "xterm-256color" };
   for (const key of Object.keys(env)) if (/API_KEY|TOKEN|SECRET|PASSWORD/.test(key)) delete env[key];
-  function run(args = [], commands = [], saveGlobal = false, submit = "normal") {
+  function run(args = [], commands = [], saveGlobal = false, submit = "normal", extraEnv = {}) {
     const output = join(root, `probe-${Date.now()}.json`);
     const result = spawnSync(process.execPath, [
       "--import", resolve("test/fixtures/project-input-probe.js"),
       resolve(process.env.PROJECT_PROBE_BASELINE === "1" ? "test/fixtures/project-input-baseline.js" : "dist/cli.js"), project,
       "--offline", "--no-session", ...args], {
       env: { ...env, PROJECT_BASELINE: process.env.PROJECT_PROBE_BASELINE ?? "0", PROJECT_PROBE_OUTPUT: output, PROJECT_PROBE_FAKE_TTY: "1",
-        PROJECT_PROBE_SUBMIT: submit,
+        PROJECT_PROBE_SUBMIT: submit, ...extraEnv,
         PROJECT_PROBE_COMMANDS: JSON.stringify(commands), PROJECT_PROBE_SAVE_GLOBAL: saveGlobal ? "1" : "0" },
       encoding: "utf8", timeout: 35000,
     });
@@ -72,13 +76,13 @@ function assertProjectIgnored(result, f, marker, expectedCwds = [f.project]) {
     assert.equal(state.editorPaddingX, 2);
     assert.deepEqual(state.projectSettings, {});
     assert.deepEqual(state.packages, []);
-    assert.ok(state.extensions.every(path => path.startsWith("<inline:")));
+    assert.deepEqual(state.extensions.filter(path => !path.startsWith("<inline:")), [piMemoryExtension]);
     assert.deepEqual(state.skills, []);
     assert.deepEqual(state.prompts, []);
     assert.deepEqual(state.context.agentsFiles, []);
     assert.doesNotMatch(state.systemPrompt, /PROJECT_INPUT_SENTINEL/);
     assert.doesNotMatch(state.chat, /This project is not trusted|Saved trust decision/);
-    assert.deepEqual(state.tools, ["read", "grep", "find", "ls"]);
+    assert.deepEqual(state.tools, [...getDefaultMode().tools]);
   }
   assert.equal(existsSync(marker), false);
   assert.deepEqual(result.projectAccesses, [], "project/parent resource directories must not even be inspected");
@@ -90,6 +94,18 @@ test(".pi resources do not display pi's project-trust notice in the real TUI", t
   const { before } = run();
   assert.equal(before.cwd, project);
   assert.doesNotMatch(before.chat, /This project is not trusted|restart pi|\/trust/);
+});
+
+test("pi-memory saves memory under ~/.sakunyan/memory only", t => {
+  const { root, home, project, run } = fixture(t);
+  const elsewhere = join(root, "elsewhere-memory");
+  const { memory } = run([], [], false, "normal", { PROJECT_PROBE_MEMORY: "1", PI_MEMORY_DIR: elsewhere });
+  const memoryFile = join(home, ".sakunyan", "memory", "MEMORY.md");
+  assert.equal(memory.details.path, memoryFile);
+  assert.match(readFileSync(memoryFile, "utf8"), /MEMORY_SENTINEL/);
+  assert.equal(existsSync(elsewhere), false);
+  assert.equal(existsSync(join(home, ".pi")), false);
+  assert.deepEqual(readdirSync(project).sort(), [".pi", "target.txt"]);
 });
 
 test("/trust cannot save a decision or open pi's trust selector", t => {

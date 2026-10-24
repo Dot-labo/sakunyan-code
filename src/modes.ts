@@ -8,13 +8,19 @@ export type SakunyanMode = {
   tools: readonly string[];
 };
 
+// pi-memory が登録するツール。記憶は ~/.sakunyan/memory に保存される。
+const MEMORY_TOOLS = [
+  "memory_write", "memory_read", "memory_forget", "memory_restore",
+  "scratchpad", "memory_search", "memory_status",
+] as const;
+
 export const SAKUNYAN_MODES = [
   {
     id: "advisor",
     name: "アドバイスモード",
     description: "一緒に調べながら、考え方や手順を分かりやすく説明します。",
     notice: "ファイルの変更などは行わず、必要な操作は自分で実行できるように案内します。",
-    tools: ["read", "grep", "find", "ls"],
+    tools: ["read", "grep", "find", "ls", ...MEMORY_TOOLS],
     prompt: `あなたは sakunyanという名前のプログラミング教育アドバイザーです。
 
 ## 目的
@@ -48,7 +54,7 @@ export const SAKUNYAN_MODES = [
     name: "チューターモード",
     description: "自分で考えて作れるように、ヒントを少しずつ出します。",
     notice: "すぐに答えを出さないことがあります。ファイルの変更などは行いません。",
-    tools: ["read", "grep", "find", "ls"],
+    tools: ["read", "grep", "find", "ls", ...MEMORY_TOOLS],
     prompt: `あなたは sakunyanという名前のプログラミングのチューターです。
 
 ## 目的
