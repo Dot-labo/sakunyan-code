@@ -255,12 +255,13 @@ test("応答モードを選択し、次のターンへプロンプトを適用�
   assert.match(statuses.at(-1), /アドバイスモード/);
 });
 
-test("チューターモードは読み取りだけで、手がかりを4段で出す指示を持つ", () => {
-  // 選べるモードは、アドバイスとチューターの2つだけ。
-  assert.deepEqual(SAKUNYAN_MODES.map(({ id }) => id), ["advisor", "tutor"]);
-  assert.deepEqual(SAKUNYAN_MODES.map(({ name }) => name), ["アドバイスモード", "チューターモード"]);
+test("応答モードはアドバイス・チューター・たんていの順で、既定はアドバイス", () => {
+  assert.deepEqual(SAKUNYAN_MODES.map(({ id }) => id), ["advisor", "tutor", "detective"]);
+  assert.deepEqual(SAKUNYAN_MODES.map(({ name }) => name), ["アドバイスモード", "チューターモード", "たんていモード"]);
   assert.equal(DEFAULT_MODE_ID, "advisor");
+});
 
+test("チューターモードは読み取りだけで、手がかりを4段で出す指示を持つ", () => {
   const tutor = SAKUNYAN_MODES.find(({ id }) => id === "tutor");
   const advisor = SAKUNYAN_MODES.find(({ id }) => id === "advisor");
   // 使えるツールは、アドバイスモードと同じ読み取りだけ。
@@ -335,12 +336,12 @@ test("アドバイスモードの定義は変わらず、大阪弁モードは�
       },
     },
   });
-  assert.equal(screens.length, 3);
-  assert.equal(screens[0], screens[2]);
+  assert.equal(screens.length, 4);
+  assert.equal(screens[0], screens[3]);
   for (const screen of screens) {
     assert.doesNotMatch(screen, /大阪弁|サンプル|動作確認用/);
-    // 候補は2行だけ。
-    assert.equal(screen.split("\n").filter((line) => /^[→ ] .+モード$/.test(line)).length, 2);
+    // 候補は3行。
+    assert.equal(screen.split("\n").filter((line) => /^[→ ] .+モード$/.test(line)).length, 3);
   }
   assert.match(screens[0], /→ アドバイスモード\n  チューターモード/);
   assert.match(screens[1], /  アドバイスモード\n→ チューターモード/);
