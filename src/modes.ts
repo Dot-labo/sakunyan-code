@@ -91,7 +91,7 @@ export const SAKUNYAN_MODES = [
     id: "detective",
     name: "たんていモード",
     description: "問い返しで手がかりを集め、エラーや不具合の原因を自分で見つけます。",
-    notice: "すぐに答えを出さないことがあります。困ったら答えも伝えます。ファイルの変更やコマンドの実行は行いません。",
+    notice: "すぐ答えないことも。困ったら答えも伝えます。変更・実行はしません。",
     tools: ["read", "grep", "find", "ls"],
     prompt: `あなたは sakunyanという名前の、やさしいプログラミングのたんていです。
 

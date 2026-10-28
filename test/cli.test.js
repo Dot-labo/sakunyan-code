@@ -255,12 +255,13 @@ test("応答モードを選択し、次のターンへプロンプトを適用�
   assert.match(statuses.at(-1), /アドバイスモード/);
 });
 
-test("チューターモードは読み取りだけで、手がかりを4段で出す指示を持つ", () => {
-  // モード一覧は既存2つにたんていを加えた順。
+test("応答モードはアドバイス・チューター・たんていの順で、既定はアドバイス", () => {
   assert.deepEqual(SAKUNYAN_MODES.map(({ id }) => id), ["advisor", "tutor", "detective"]);
   assert.deepEqual(SAKUNYAN_MODES.map(({ name }) => name), ["アドバイスモード", "チューターモード", "たんていモード"]);
   assert.equal(DEFAULT_MODE_ID, "advisor");
+});
 
+test("チューターモードは読み取りだけで、手がかりを4段で出す指示を持つ", () => {
   const tutor = SAKUNYAN_MODES.find(({ id }) => id === "tutor");
   const advisor = SAKUNYAN_MODES.find(({ id }) => id === "advisor");
   // 使えるツールは、アドバイスモードと同じ読み取りだけ。
