@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { CLASSROOM_RULES, CLASSROOM_RULES_PROMPT } from "../dist/classroom-rules.js";
 import { sakunyanExtension } from "../dist/extension.js";
-import { getDefaultMode, SAKUNYAN_MODES } from "../dist/modes.js";
+import { getDefaultMode, MEMORY_POLICY_PROMPT, SAKUNYAN_MODES } from "../dist/modes.js";
 
 // sakunyan専用フォルダ（実行時は ~/.sakunyan に固定）を一時フォルダに向け、
 // 以前のバージョンが作ったルールファイル（CLASSROOM.md）を使わない・さわらないことを確かめる。
@@ -110,8 +110,8 @@ test("全ての応答モードの指示へ、固定のルールを足す（フ�
     context.ui.custom = async () => mode;
     await commands.get("mode").handler("", context);
     const prompt = await ask();
-    assert.ok(prompt.startsWith(`BASE_PROMPT\n\n${mode.prompt}\n\n`), mode.id);
-    // モードの指示 → 実行環境 → 教室共通のルール → 優先順位の指示、の順に並ぶ。
+    assert.ok(prompt.startsWith(`BASE_PROMPT\n\n${mode.prompt}\n\n${MEMORY_POLICY_PROMPT}\n\n`), mode.id);
+    // モードの指示 → 記憶の方針 → 実行環境 → 教室共通のルール → 優先順位の指示、の順に並ぶ。
     assert.ok(prompt.endsWith(`その指定を優先してください。\n\n${CLASSROOM_RULES_PROMPT}`), mode.id);
     for (const pattern of [/`uv`/, /`gh`/, /`pyxel`/, /利用者の指定と制約を優先/]) assert.match(prompt, pattern, mode.id);
     // 使えるツールは、モードの定義のまま。

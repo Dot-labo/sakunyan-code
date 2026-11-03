@@ -64,6 +64,10 @@ InteractiveMode.prototype.run = async function () {
   if (selector) selector.handleInput("\r");
   const after = snapshot();
   const read = await host.session.agent.state.tools.find(t => t.name === "read").execute("probe", { path: "target.txt" });
+  const memory = process.env.PROJECT_PROBE_MEMORY === "1"
+    ? await host.session.agent.state.tools.find(t => t.name === "memory_write")
+      .execute("probe", { target: "long_term", content: "MEMORY_SENTINEL" })
+    : undefined;
   const transitions = [];
   for (const command of JSON.parse(process.env.PROJECT_PROBE_COMMANDS ?? "[]")) {
     await (typeof command === "string" ? this.editor.onSubmit(command) : host.switchSession(command.switchSession));
@@ -74,7 +78,7 @@ InteractiveMode.prototype.run = async function () {
     await host.services.settingsManager.flush();
     await host.services.settingsManager.reload();
   }
-  writeFileSync(process.env.PROJECT_PROBE_OUTPUT, JSON.stringify({ before, after, transitions, completions, projectAccesses, trustSelector: Boolean(selector), read, final: snapshot() }));
+  writeFileSync(process.env.PROJECT_PROBE_OUTPUT, JSON.stringify({ before, after, transitions, completions, projectAccesses, trustSelector: Boolean(selector), read, memory, final: snapshot() }));
   this.stop();
   await host.dispose();
   process.exit(0);

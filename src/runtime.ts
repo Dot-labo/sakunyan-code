@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { homedir } from "node:os";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import {
   createAgentSessionFromServices, createAgentSessionRuntime, createAgentSessionServices,
   getAgentDir, initTheme, InteractiveMode, parseArgs, resolveCliModel,
@@ -12,6 +13,10 @@ import { createGlobalSettings } from "./global-settings.js";
 import { MODEL_ID, MODEL_PROVIDER } from "./model-config.js";
 import { getDefaultMode } from "./modes.js";
 import { projectPolicyExtension } from "./project-policy.js";
+
+// pi-memory ships TypeScript, which Node cannot load from node_modules.
+// pi's extension loader (jiti) can, and aliases its pi imports to ours.
+const PI_MEMORY_PACKAGE_DIR = dirname(createRequire(import.meta.url).resolve("pi-memory/package.json"));
 
 /** Use pi's SDK injection points, not main's unconditional project discovery. */
 export async function createSakunyanRuntime(args: Args, sessionManager: SessionManager) {
@@ -26,6 +31,7 @@ export async function createSakunyanRuntime(args: Args, sessionManager: SessionM
       resourceLoaderOptions: {
         noExtensions: true, noSkills: true, noPromptTemplates: true,
         noThemes: true, noContextFiles: true, systemPrompt: "", appendSystemPrompt: [],
+        additionalExtensionPaths: [PI_MEMORY_PACKAGE_DIR],
         extensionFactories: [
           { name: "sakunyan", factory: sakunyanExtension, hidden: true },
           { name: "project-policy", factory: projectPolicyExtension, hidden: true },
