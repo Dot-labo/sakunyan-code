@@ -12,13 +12,17 @@
 - [x] 2.1 `src/agent-dir.ts` で `PI_MEMORY_DIR` を `~/.sakunyan/memory` に設定する
 - [x] 2.2 `src/runtime.ts` で pi-memory のパッケージフォルダを解決し、`additionalExtensionPaths` に渡す
 - [x] 2.3 `src/modes.ts` に pi-memory の7つのツール名を `MEMORY_TOOLS` として定義し、すべてのモードの `tools` に含める
+- [x] 2.4 `src/modes.ts` に `MEMORY_POLICY_PROMPT` を定義し、`src/extension.ts` でシステムプロンプトに加える
+- [x] 2.5 `src/agent-dir.ts` で `PI_MEMORY_EXIT_SUMMARY=0` を設定する
 
 ## 3. テスト
 
 - [x] 3.1 既存テストのツール一覧の期待値を更新する
 - [x] 3.2 起動時に pi-memory が読み込まれ、記憶用ツールが有効になることをテストする
 - [x] 3.3 一時的な `HOME` で `memory_write` を実行し、`~/.sakunyan/memory/` に保存され、`~/.pi/agent/memory/` と作業フォルダに何も作られないことをテストする
-- [x] 3.4 `npm test` と `npm run typecheck` が通ることを確認する
+- [x] 3.4 どのモードでもシステムプロンプトに記憶の方針が含まれることをテストする
+- [x] 3.5 環境変数で有効にしても終了時の要約が無効のままであることをテストする
+- [x] 3.6 `npm test` と `npm run typecheck` が通ることを確認する
 
 ## 4. 文書
 

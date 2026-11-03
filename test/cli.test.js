@@ -469,6 +469,16 @@ test("sakunyanの保存先はpi標準のディレクトリから分離される"
   }
 });
 
+test("pi-memoryの終了時の要約は、環境変数で有効にしても無効のまま", () => {
+  const code = 'await import("./dist/agent-dir.js"); process.stdout.write(process.env.PI_MEMORY_EXIT_SUMMARY);';
+  const result = spawnSync(process.execPath, ["--input-type=module", "-e", code], {
+    encoding: "utf8",
+    env: { ...process.env, PI_MEMORY_EXIT_SUMMARY: "1" },
+  });
+  assert.equal(result.status, 0);
+  assert.equal(result.stdout, "0");
+});
+
 test("pi本体の更新確認は無効化される", async () => {
   await import("../dist/agent-dir.js");
   assert.equal(process.env.PI_SKIP_VERSION_CHECK, "1");

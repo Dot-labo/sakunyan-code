@@ -5,7 +5,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { messages } from "./messages.js";
 import { MODEL_ID, MODEL_PROVIDER } from "./model-config.js";
-import { getDefaultMode, SAKUNYAN_MODES, type SakunyanMode } from "./modes.js";
+import { getDefaultMode, MEMORY_POLICY_PROMPT, SAKUNYAN_MODES, type SakunyanMode } from "./modes.js";
 import { CLASSROOM_RULES_PROMPT } from "./classroom-rules.js";
 import { canReachServer } from "./network-check.js";
 import { fetchLatestSakunyanVersion, isUpdateAvailable } from "./update-check.js";
@@ -421,10 +421,10 @@ export function sakunyanExtension(pi: ExtensionAPI): void {
     },
   });
 
-  // 組み立て順: piの基本 → 応答モード → 実行環境 → 教室共通のルール（パッケージが提供する固定の内容）。
+  // 組み立て順: piの基本 → 応答モード → 記憶の方針 → 実行環境 → 教室共通のルール（パッケージが提供する固定の内容）。
   // 画面のあるモードでも、ないモード（-p など）でも、選択中の応答モードに関係なく足す。
   pi.on("before_agent_start", (event) => ({
-    systemPrompt: `${event.systemPrompt}\n\n${currentMode.prompt}\n\n利用者の実行環境は${runtimeOS}です。操作手順やコマンドはこの環境に合わせて案内してください。ChromebookではLinux開発環境のターミナルを想定してください。シェルが不明で手順が異なる場合は確認してください。利用者が別の環境やリモート環境について質問した場合は、その指定を優先してください。\n\n${CLASSROOM_RULES_PROMPT}`,
+    systemPrompt: `${event.systemPrompt}\n\n${currentMode.prompt}\n\n${MEMORY_POLICY_PROMPT}\n\n利用者の実行環境は${runtimeOS}です。操作手順やコマンドはこの環境に合わせて案内してください。ChromebookではLinux開発環境のターミナルを想定してください。シェルが不明で手順が異なる場合は確認してください。利用者が別の環境やリモート環境について質問した場合は、その指定を優先してください。\n\n${CLASSROOM_RULES_PROMPT}`,
   }));
 
   pi.on("session_start", async (event, ctx) => {

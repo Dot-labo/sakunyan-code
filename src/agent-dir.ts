@@ -8,3 +8,5 @@ process.env.PI_CODING_AGENT_DIR = SAKUNYAN_AGENT_DIR;
 process.env.PI_SKIP_VERSION_CHECK = "1";
 // pi-memory reads this once when its module is evaluated.
 process.env.PI_MEMORY_DIR = SAKUNYAN_MEMORY_DIR;
+// The exit summary ignores the memory policy, and kept names and passwords.
+process.env.PI_MEMORY_EXIT_SUMMARY = "0";
