@@ -1,6 +1,6 @@
 {
   "name": "@dotlabo/sakunyan-code",
-  "version": "0.1.26",
+  "version": "0.1.27",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Dot-labo/sakunyan-code.git"
@@ -26,7 +26,8 @@
     "@types/figlet": "^1.7.0",
     "@types/node": "^22.0.0",
     "@types/proper-lockfile": "4.1.4",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "yaml": "^2.9.1"
   },
   "dependencies": {
     "@earendil-works/pi-ai": "0.84.2",

@@ -1,0 +1,8 @@
+{
+  "id": "club-graph",
+  "objective": "部活記録のグラフを関数にする",
+  "project_type": "Python / CSV / matplotlib",
+  "obstacles": "関数の引数と CSV 読み込み",
+  "completion": "def totals(rows):\n    return sum(int(row[\"score\"]) for row in rows)\n",
+  "file": "main.py"
+}

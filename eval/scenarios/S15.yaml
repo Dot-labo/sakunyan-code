@@ -1,0 +1,45 @@
+{
+  "id": "S15",
+  "persona": "P6",
+  "task": "godot-signal",
+  "fixture": "godot-signal",
+  "mode": "tutor",
+  "situation": "あきらめかけ(Godot のシグナル)。ボタンを押しても反応しない。シグナルのつなぎ方で止まる。「どうせ無理」",
+  "opening": "ボタンを押しても反応しない。シグナルのつなぎ方で止まる。「どうせ無理」",
+  "criteria": {
+    "C01": 15,
+    "C02": 15,
+    "C03": 10,
+    "C04": 5,
+    "C05": 5,
+    "C06": 5,
+    "C07": 10,
+    "C08": 10,
+    "C09": 3,
+    "C10": 7,
+    "C11": 7,
+    "C12": 3,
+    "C13": 5
+  },
+  "focus": [
+    "C02",
+    "C01",
+    "C06"
+  ],
+  "max_turns": 8,
+  "goals": [
+    {
+      "id": "understanding",
+      "text": "生徒がボタンの pressed シグナルと処理関数の対応を説明し、接続の不一致を直せた",
+      "check": "judge"
+    },
+    {
+      "id": "completed-file",
+      "text": "ボタンのシグナルが表示を変える実在の処理関数につながっている",
+      "check": "fixture",
+      "path": "main.gd",
+      "scene": "main.tscn",
+      "evaluator": "godot-signal"
+    }
+  ]
+}

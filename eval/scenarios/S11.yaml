@@ -1,0 +1,45 @@
+{
+  "id": "S11",
+  "persona": "P4",
+  "task": "godot-node",
+  "fixture": "godot-node",
+  "mode": "tutor",
+  "situation": "話がそれる(Godot のノードの位置)。同じ。キャラクターの絵が画面に出ない。親ノードと位置の理解で止まる",
+  "opening": "同じ。キャラクターの絵が画面に出ない。親ノードと位置の理解で止まる",
+  "criteria": {
+    "C01": 15,
+    "C02": 15,
+    "C03": 10,
+    "C04": 5,
+    "C05": 5,
+    "C06": 5,
+    "C07": 10,
+    "C08": 10,
+    "C09": 3,
+    "C10": 7,
+    "C11": 7,
+    "C12": 3,
+    "C13": 5
+  },
+  "focus": [
+    "C02",
+    "C03",
+    "C05"
+  ],
+  "max_turns": 10,
+  "goals": [
+    {
+      "id": "understanding",
+      "text": "生徒が親ノードに対する位置を理解し、キャラクターを画面内に置く変更を説明できた",
+      "check": "judge"
+    },
+    {
+      "id": "completed-file",
+      "text": "キャラクターの初期化後の位置が画面内にある",
+      "check": "fixture",
+      "path": "main.gd",
+      "scene": "main.tscn",
+      "evaluator": "godot-visible"
+    }
+  ]
+}

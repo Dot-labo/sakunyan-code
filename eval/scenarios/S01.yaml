@@ -1,0 +1,42 @@
+{
+  "id": "S01",
+  "persona": "P1",
+  "task": "python-name",
+  "fixture": "python-name",
+  "mode": "advisor",
+  "situation": "初めて。技術の授業の「名前を表示する」課題を動かす",
+  "opening": "技術の授業の「名前を表示する」課題を動かす",
+  "criteria": {
+    "C01": 15,
+    "C02": 15,
+    "C03": 10,
+    "C04": 5,
+    "C05": 5,
+    "C06": 5,
+    "C07": 10,
+    "C08": 10,
+    "C09": 3,
+    "C10": 7,
+    "C11": 7,
+    "C12": 3,
+    "C13": 5
+  },
+  "focus": [
+    "C04",
+    "C05",
+    "C06"
+  ],
+  "max_turns": 8,
+  "goals": [
+    {
+      "id": "understanding",
+      "text": "生徒が print の打ち間違いを直し、名前が表示される理由を自分の言葉で説明できた",
+      "check": "judge"
+    },
+    {
+      "id": "completed-file",
+      "text": "最終コードが名前を表示する有効な Python になっている。引用符・表示する名前・変数経由などの別解も認める",
+      "check": "judge"
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "id": "S02",
+  "persona": "P1",
+  "task": "python-name",
+  "fixture": "python-name",
+  "mode": "tutor",
+  "situation": "初めて。同じ課題。2 語で返し、打ち間違える",
+  "opening": "同じ課題。2 語で返し、打ち間違える",
+  "criteria": {
+    "C01": 15,
+    "C02": 15,
+    "C03": 10,
+    "C04": 5,
+    "C05": 5,
+    "C06": 5,
+    "C07": 10,
+    "C08": 10,
+    "C09": 3,
+    "C10": 7,
+    "C11": 7,
+    "C12": 3,
+    "C13": 5
+  },
+  "focus": [
+    "C02",
+    "C03",
+    "C05",
+    "C06"
+  ],
+  "max_turns": 8,
+  "goals": [
+    {
+      "id": "understanding",
+      "text": "生徒が pritn の打ち間違いに気づいて print に直し、名前の表示方法を説明できた",
+      "check": "judge"
+    },
+    {
+      "id": "completed-file",
+      "text": "最終コードが名前を表示する有効な Python になっている。引用符・表示する名前・変数経由などの別解も認める",
+      "check": "judge"
+    }
+  ]
+}

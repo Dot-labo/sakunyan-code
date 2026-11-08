@@ -1,0 +1,8 @@
+{
+  "id": "html-page",
+  "objective": "自己紹介ページを表示する",
+  "project_type": "HTML / CSS",
+  "obstacles": "タグの閉じ忘れ",
+  "completion": "<html><body><h1>こんにちは</h1></body></html>\n",
+  "file": "index.html"
+}

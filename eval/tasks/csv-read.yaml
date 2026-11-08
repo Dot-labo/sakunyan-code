@@ -1,0 +1,8 @@
+{
+  "id": "csv-read",
+  "objective": "CSV のデータを読む",
+  "project_type": "Python / CSV",
+  "obstacles": "cd・相対パス・uv と pip",
+  "completion": "import csv\nwith open(\"data.csv\") as f:\n    print(list(csv.DictReader(f)))\n",
+  "file": "main.py"
+}

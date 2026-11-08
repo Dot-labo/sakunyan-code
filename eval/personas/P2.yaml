@@ -1,0 +1,15 @@
+{
+  "id": "P2",
+  "name": "中2・答えをせがむ",
+  "age_grade": "中 2",
+  "experience": "中 2。Python を半年。for 文まで",
+  "temperament": "すぐ「答え教えて」。「めんどい」が口ぐせ。試す前に聞く",
+  "stance": "部活の合間に、敵を動かしたい。時間が無いと言う",
+  "examples": [
+    "答え教えて",
+    "めんどい",
+    "時間ない"
+  ],
+  "os": "学校の Windows",
+  "grade_band": "middle"
+}

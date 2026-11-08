@@ -1,0 +1,51 @@
+{
+  "id": "S09",
+  "persona": "P3",
+  "task": "club-graph",
+  "fixture": "club-graph",
+  "mode": "tutor",
+  "situation": "2 つのフォルダを行き来(記憶)。A で作る→B に移る→A に戻る。戻ったら続きを言えるか",
+  "opening": "A で作る→B に移る→A に戻る。戻ったら続きを言えるか",
+  "criteria": {
+    "C01": 15,
+    "C02": 15,
+    "C03": 10,
+    "C04": 5,
+    "C05": 5,
+    "C06": 5,
+    "C07": 10,
+    "C08": 10,
+    "C09": 3,
+    "C10": 7,
+    "C11": 7,
+    "C12": 3,
+    "C13": 5
+  },
+  "focus": [
+    "C10",
+    "C11",
+    "C12"
+  ],
+  "max_turns": 14,
+  "goals": [
+    {
+      "id": "understanding",
+      "text": "フォルダ A に戻ったとき、記憶に基づいて部活記録の作業状況と次の作業を正しく再開できた",
+      "check": "judge"
+    }
+  ],
+  "folders": [
+    "A",
+    "B",
+    "A"
+  ],
+  "memory_question": true,
+  "folder_fixtures": {
+    "A": "club-graph",
+    "B": "csv-read"
+  },
+  "folder_tasks": {
+    "A": "club-graph",
+    "B": "csv-read"
+  }
+}

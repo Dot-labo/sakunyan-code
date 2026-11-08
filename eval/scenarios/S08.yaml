@@ -1,0 +1,46 @@
+{
+  "id": "S08",
+  "persona": "P3",
+  "task": "csv-read",
+  "fixture": "club-graph",
+  "mode": "advisor",
+  "situation": "別のフォルダに移る。フォルダ B で別の課題。A の話は出さない",
+  "opening": "フォルダ B で別の課題。A の話は出さない",
+  "criteria": {
+    "C01": 15,
+    "C02": 15,
+    "C03": 10,
+    "C04": 5,
+    "C05": 5,
+    "C06": 5,
+    "C07": 10,
+    "C08": 10,
+    "C09": 3,
+    "C10": 7,
+    "C11": 7,
+    "C12": 3,
+    "C13": 5
+  },
+  "focus": [
+    "C11",
+    "C10"
+  ],
+  "max_turns": 8,
+  "goals": [
+    {
+      "id": "understanding",
+      "text": "フォルダ B の CSV 読み込みの次の操作が具体的に示され、A の部活記録の話が混入しなかった",
+      "check": "judge"
+    }
+  ],
+  "folders": [
+    "B"
+  ],
+  "forbidden_terms": [
+    "部活の記録グラフ"
+  ],
+  "folder_fixtures": {
+    "A": "club-graph",
+    "B": "csv-read"
+  }
+}

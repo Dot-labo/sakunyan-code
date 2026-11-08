@@ -1,0 +1,10 @@
+{
+  "id": "C15",
+  "name": "時間",
+  "observes": "1 シナリオの所要秒。1 往復の所要秒(sakunyan の返事まで)",
+  "threshold": "点にはしない。1 往復の中央値が前の版より +30% を超えたら印",
+  "method": "machine",
+  "weight": 0,
+  "kind": "metric",
+  "evaluator": "C15"
+}

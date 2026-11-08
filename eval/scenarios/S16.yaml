@@ -1,0 +1,45 @@
+{
+  "id": "S16",
+  "persona": "P6",
+  "task": "godot-signal",
+  "fixture": "godot-signal",
+  "mode": "advisor",
+  "situation": "あきらめかけ(.gd・.tscn を読む)。同じ。3 回聞いても分からない。sakunyan が .gd と .tscn を読み、シグナルの線やノード名のずれを行番号で伝える。.gd・.tscn は書き換えない",
+  "opening": "同じ。3 回聞いても分からない。sakunyan が .gd と .tscn を読み、シグナルの線やノード名のずれを行番号で伝える。.gd・.tscn は書き換えない",
+  "criteria": {
+    "C01": 15,
+    "C02": 15,
+    "C03": 10,
+    "C04": 5,
+    "C05": 5,
+    "C06": 5,
+    "C07": 10,
+    "C08": 10,
+    "C09": 3,
+    "C10": 7,
+    "C11": 7,
+    "C12": 3,
+    "C13": 5
+  },
+  "focus": [
+    "C08",
+    "C04",
+    "C06"
+  ],
+  "max_turns": 8,
+  "goals": [
+    {
+      "id": "understanding",
+      "text": "生徒が行番号付きの説明をもとに .gd と .tscn の接続先の不一致を特定し、修正箇所を説明できた",
+      "check": "judge"
+    },
+    {
+      "id": "completed-file",
+      "text": "ボタンのシグナルが表示を変える実在の処理関数につながっている",
+      "check": "fixture",
+      "path": "main.gd",
+      "scene": "main.tscn",
+      "evaluator": "godot-signal"
+    }
+  ]
+}

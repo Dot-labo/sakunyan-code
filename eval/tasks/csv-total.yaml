@@ -1,0 +1,8 @@
+{
+  "id": "csv-total",
+  "objective": "CSV 集計の関数を自分で書く",
+  "project_type": "Python / Excel / CSV",
+  "obstacles": "集計と関数を選ぶ理由",
+  "completion": "def total(rows):\n    return sum(int(row[\"amount\"]) for row in rows)\n",
+  "file": "main.py"
+}

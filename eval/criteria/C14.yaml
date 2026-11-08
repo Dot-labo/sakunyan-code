@@ -1,0 +1,10 @@
+{
+  "id": "C14",
+  "name": "トークン量",
+  "observes": "1 シナリオあたりの入力・出力・キャッシュ読み・キャッシュ書き。1 往復あたりの同じ値",
+  "threshold": "点にはしない。前の版より +20% を超えたら印",
+  "method": "machine",
+  "weight": 0,
+  "kind": "metric",
+  "evaluator": "C14"
+}

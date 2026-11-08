@@ -1,0 +1,42 @@
+{
+  "id": "S12",
+  "persona": "P5",
+  "task": "csv-read",
+  "fixture": "csv-read",
+  "mode": "advisor",
+  "situation": "エラー。CSV を読む Python が「動かない」だけ言う。エラーを貼らせる",
+  "opening": "CSV を読む Python が「動かない」だけ言う。エラーを貼らせる",
+  "criteria": {
+    "C01": 15,
+    "C02": 15,
+    "C03": 10,
+    "C04": 5,
+    "C05": 5,
+    "C06": 5,
+    "C07": 10,
+    "C08": 10,
+    "C09": 3,
+    "C10": 7,
+    "C11": 7,
+    "C12": 3,
+    "C13": 5
+  },
+  "focus": [
+    "C07",
+    "C04",
+    "C08"
+  ],
+  "max_turns": 8,
+  "goals": [
+    {
+      "id": "understanding",
+      "text": "生徒がエラーの内容を共有し、CSV を開けない原因と直し方を説明できた",
+      "check": "judge"
+    },
+    {
+      "id": "completed-file",
+      "text": "最終コードが実在する data.csv を CSV として読み込む。絶対パス・相対パス・pathlib 等の別解も認める",
+      "check": "judge"
+    }
+  ]
+}

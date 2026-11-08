@@ -1,0 +1,8 @@
+{
+  "id": "pyxel-enemy",
+  "objective": "敵を横に動かす",
+  "project_type": "Python / pyxel",
+  "obstacles": "更新関数と x 座標",
+  "completion": "def update():\n    global enemy_x\n    enemy_x += 1\n",
+  "file": "main.py"
+}

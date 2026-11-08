@@ -1,0 +1,24 @@
+{
+  "student_model": "deepseek/deepseek-v4.1-flash",
+  "judge_model": "openai/gpt-6.1-terra",
+  "judge_reasoning": "high",
+  "budget_usd": 0.8,
+  "pass_score": 85,
+  "roles": {
+    "sakunyan": {
+      "max_output_tokens": 16384,
+      "max_price_prompt": 0.1,
+      "max_price_completion": 0.2
+    },
+    "student": {
+      "max_output_tokens": 4096,
+      "max_price_prompt": 0.06,
+      "max_price_completion": 0.6
+    },
+    "judge": {
+      "max_output_tokens": 32768,
+      "max_price_prompt": 1.1,
+      "max_price_completion": 5.5
+    }
+  }
+}

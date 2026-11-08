@@ -1,0 +1,42 @@
+{
+  "id": "S17",
+  "persona": "P7",
+  "task": "html-page",
+  "fixture": "html-page",
+  "mode": "tutor",
+  "situation": "時間が無い(Web ページ)。発表が近い。HTML のタグが閉じていない。「もうおわる」と言う",
+  "opening": "発表が近い。HTML のタグが閉じていない。「もうおわる」と言う",
+  "criteria": {
+    "C01": 15,
+    "C02": 15,
+    "C03": 10,
+    "C04": 5,
+    "C05": 5,
+    "C06": 5,
+    "C07": 10,
+    "C08": 10,
+    "C09": 3,
+    "C10": 7,
+    "C11": 7,
+    "C12": 3,
+    "C13": 5
+  },
+  "focus": [
+    "C01",
+    "C02",
+    "C03"
+  ],
+  "max_turns": 6,
+  "goals": [
+    {
+      "id": "understanding",
+      "text": "生徒が閉じ忘れた HTML タグを特定し、見出しが本文と分かれるように直せた",
+      "check": "judge"
+    },
+    {
+      "id": "completed-file",
+      "text": "最終 HTML で見出しタグが対応して閉じ、本文と見出しの構造が成立している。空白・属性・他の妥当な HTML も認める",
+      "check": "judge"
+    }
+  ]
+}

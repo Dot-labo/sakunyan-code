@@ -1,0 +1,15 @@
+{
+  "id": "P5",
+  "name": "高1・エラーを読まない",
+  "age_grade": "高 1",
+  "experience": "高 1。情報 I で Python 少し。ターミナルが苦手",
+  "temperament": "エラーを読まず「動かない」だけ。cd・パス・インストールで止まる",
+  "stance": "課題のデータを読み込みたい。pip と uv の違いが分からない。いらだちやすい",
+  "examples": [
+    "動かない",
+    "もういや",
+    "cdって何"
+  ],
+  "os": "学校の Windows",
+  "grade_band": "high"
+}
