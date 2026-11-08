@@ -30,6 +30,7 @@ export async function loadCatalog(root = ROOT) {
   for (const p of Object.values(catalog.personas)) if (!Array.isArray(p.examples) || p.examples.length<3 || p.examples.length>5) throw new Error(`${p.id}: 入力例は3〜5文です`);
   for (const c of Object.values(catalog.criteria)) {
     if (!['machine','judge'].includes(c.method) || !['score','metric','overall'].includes(c.kind) || !Number.isFinite(c.weight) || c.weight<0) throw new Error(`${c.id}: 基準の定義が不正です`);
+    if (c.modes !== undefined && (!Array.isArray(c.modes) || !c.modes.length || c.modes.some(m=>!['advisor','tutor'].includes(m)))) throw new Error(`${c.id}: modes が不正です`);
     if (c.method==='machine' && !['C04','C05','C08','C09','C10','C13','C14','C15','C16'].includes(c.evaluator)) throw new Error(`${c.id}: 機械の判定方法がありません`);
   }
   for (const s of Object.values(catalog.scenarios)) await validateScenario(s,catalog,root);
@@ -56,8 +57,11 @@ export async function validateScenario(s,catalog,root=ROOT) {
     if (g.check==='fixture') {safePath(resolve(root,'fixtures',s.fixture),g.path); if(g.evaluator)safePath(resolve(root,'fixtures',s.fixture),g.scene); if(g.evaluator&&!['godot-visible','godot-signal'].includes(g.evaluator))throw new Error('知らない fixture 判定方法です'); if(!g.evaluator&&!g.absent&&typeof g.contains!=='string') throw new Error('fixture ゴールに contains がありません');}
   }
 }
-export function weights(criteria, overrides={}) {
-  const active=Object.values(criteria).filter(c=>c.kind==='score');
+export function appliesToMode(criterion, mode) {
+  return !mode || !criterion.modes || criterion.modes.includes(mode);
+}
+export function weights(criteria, overrides={}, mode) {
+  const active=Object.values(criteria).filter(c=>c.kind==='score'&&appliesToMode(c,mode));
   const total=active.reduce((n,c)=>n+(overrides[c.id]??c.weight),0);
   if (!total) throw new Error('点を付ける基準の重みがすべて0です');
   return Object.fromEntries(active.map(c=>[c.id,100*(overrides[c.id]??c.weight)/total]));

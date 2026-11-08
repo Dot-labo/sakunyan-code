@@ -58,11 +58,11 @@ test('judge response requires score and numbered evidence',()=>{
 test('production runtime uses both unchanged mode prompts through actual selection handler', {timeout:30000},async()=>temp(async dir=>{
  const production=execFileSync(process.execPath,[new URL('./fixtures/eval-production-reasoning.js',import.meta.url).pathname],{cwd:dir,env:{PATH:process.env.PATH,HOME:dir,USERPROFILE:dir,SAKUNYAN_REASONING_PROBE:'1'},encoding:'utf8'});
  const productionReasoning=JSON.parse(production.match(/EVAL_REASONING:(.*)/)[1]);assert.deepEqual(productionReasoning,{effort:'high'});
- for(const mode of ['advisor','tutor']) {
-  const cwd=resolve(dir,mode),home=resolve(cwd,'home');await mkdir(home,{recursive:true});
+ for(const [mode,os] of [['advisor','macOS'],['tutor','Windows'],['advisor','Chromebook'],['tutor','Linux']]) {
+  const cwd=resolve(dir,mode+os),home=resolve(cwd,'home');await mkdir(home,{recursive:true});
   let seen;
   const provider=new OpenRouter(catalog.config,'fake',async (_url,options)=>{const body=JSON.parse(options.body);seen=body;const data={id:'test',object:'chat.completion.chunk',created:1,model:body.model,choices:[{index:0,delta:{role:'assistant',content:'動作確認です。'},finish_reason:null}]};return new Response(`data: ${JSON.stringify(data)}\n\ndata: ${JSON.stringify({...data,choices:[{index:0,delta:{},finish_reason:'stop'}],usage:{cost:.00001,prompt_tokens:1,completion_tokens:1,total_tokens:2}})}\n\ndata: [DONE]\n\n`,{headers:{'content-type':'text/event-stream'}});});
-  const subject=await createSubject({cwd,home,mode,provider});try{const turn=await subject.turn('こんにちは');assert.match(turn.assistant,/動作確認/);assert.deepEqual(seen.reasoning,productionReasoning);assert.equal(seen.max_completion_tokens,catalog.config.roles.sakunyan.max_output_tokens);assert.ok(!Object.hasOwn(seen,'max_tokens'));const system=seen.messages.filter(m=>m.role==='system').map(m=>m.content).join('\n');assert.match(system,mode==='tutor'?/4段より前に/:/教育アドバイザー/);assert.ok(!seen.tools.some(t=>['bash','write','edit'].includes(t.function.name)));}finally{await subject.close();}
+  const subject=await createSubject({cwd,home,mode,os,provider});try{const turn=await subject.turn('こんにちは');assert.match(turn.assistant,/動作確認/);assert.deepEqual(seen.reasoning,productionReasoning);assert.equal(seen.max_completion_tokens,catalog.config.roles.sakunyan.max_output_tokens);assert.ok(!Object.hasOwn(seen,'max_tokens'));const system=seen.messages.filter(m=>m.role==='system').map(m=>m.content).join('\n');assert.ok(system.includes(`利用者の実行環境は${os}です。`),system);assert.match(system,mode==='tutor'?/4段より前に/:/教育アドバイザー/);assert.ok(!seen.tools.some(t=>['bash','write','edit'].includes(t.function.name)));}finally{await subject.close();}
  }
 }));
 
@@ -214,3 +214,28 @@ test('raw judge content is retained even when output hits the length limit',asyn
  await assert.rejects(provider.json('fake',[],undefined,'judge',value=>{raw=value;}),/出力が上限/);
  assert.equal(raw,'{"partial":');
 });
+
+ test('mode criteria, student obstacles and project context stay consistent',async()=>{
+  for(const mode of ['advisor','tutor']) {
+   const provider=fakeProvider(),json=provider.json.bind(provider),students=[];let judge;
+   provider.json=async(model,messages,...rest)=>{
+    if(model===catalog.config.student_model){students.push(messages[0].content);return {text:'困っています',edits:[],done:students.length===2};}
+    judge=messages;return json(model,messages,...rest);
+   };
+   const scenario={...catalog.scenarios.S01,mode,max_turns:2};
+   let subjectContext;
+   const run=await runScenario(scenario,catalog,{provider,subjectFactory:async context=>{subjectContext=context;return fakeSubject(context);}});
+   assert.equal(run.status,'complete');assert.equal(subjectContext.os,catalog.personas[scenario.persona].os);
+   const context=students.map(s=>JSON.parse(s.slice(s.indexOf('{"persona"'))));
+   assert.ok(!Object.hasOwn(context[0].task,'obstacles'));assert.deepEqual(context[1].task.obstacles,catalog.tasks[scenario.task].obstacles);
+   assert.equal(context[0].project_path,run.turns[0].cwd);assert.match(context[0].terminal_initial_location,/ホーム/);
+   assert.match(judge[0].content,/減点の理由にしない/);
+   for(const id of ['C01','C02','C05']) {
+    assert.equal(Object.hasOwn(run.checks,id),mode==='tutor');
+    assert.equal(JSON.parse(judge[1].content).criteria.some(c=>c.id===id),mode==='tutor'&&id!=='C05');
+   }
+   const normalized=weights(catalog.criteria,scenario.criteria,mode);
+   assert.ok(Math.abs(Object.values(normalized).reduce((a,b)=>a+b,0)-100)<1e-8);
+   if(mode==='advisor')assert.match(report({runs:[run],models:{},budget:.8,spent:0}),/C01 \| 対象外/);
+  }
+ });

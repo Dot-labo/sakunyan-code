@@ -1,5 +1,5 @@
 import { fork } from 'node:child_process';
-export async function createSubject({cwd,home,mode,provider}) {
+export async function createSubject({cwd,home,mode,os,provider}) {
   // Allowlist env: never inherit saved auth, other API keys, or real HOME settings.
   const child=fork(new URL('./worker.mjs',import.meta.url),[],{cwd,env:{PATH:process.env.PATH,HOME:home,USERPROFILE:home,LANG:'ja_JP.UTF-8',NO_COLOR:'1'},stdio:['ignore','ignore','ignore','ipc']});
   let waiter;
@@ -13,7 +13,7 @@ export async function createSubject({cwd,home,mode,provider}) {
     }else if(msg.type==='error')waiter?.reject(new Error(msg.message));
     else {const w=waiter;waiter=undefined;w?.resolve(msg);}
   });
-  const ready=wait(); child.send({type:'init',cwd,mode});
+  const ready=wait(); child.send({type:'init',cwd,mode,os});
   try{await ready;}catch(e){child.kill();throw e;}
   return {async turn(text){const result=wait();child.send({type:'prompt',text});return result;},async close(){if(child.exitCode!==null)return;const ended=new Promise(resolve=>child.once('exit',resolve));if(child.connected)child.send({type:'close'});const timer=setTimeout(()=>child.kill(),2000);await ended;clearTimeout(timer);}};
 }
