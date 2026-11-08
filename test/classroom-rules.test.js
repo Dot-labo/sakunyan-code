@@ -95,7 +95,7 @@ test("全ての応答モードの指示へ、固定のルールを足す（フ�
 
   // 起動の前（画面のないモードを含む）でも、同じルールが入る。
   const printContext = { mode: "print", ui: { notify: (message) => notifications.push({ message }) } };
-  assert.ok((await ask(printContext)).endsWith(`その指定を優先してください。\n\n${CLASSROOM_RULES_PROMPT}\n\n${getDefaultMode().replyChecklist}`));
+  assert.ok((await ask(printContext)).endsWith(`その指定を優先してください。\n\n${CLASSROOM_RULES_PROMPT}`));
 
   await handlers.get("session_start")({ reason: "startup" }, context);
   await handlers.get("session_start")({ reason: "new" }, context);
@@ -112,7 +112,7 @@ test("全ての応答モードの指示へ、固定のルールを足す（フ�
     const prompt = await ask();
     assert.ok(prompt.startsWith(`BASE_PROMPT\n\n${mode.prompt}\n\n${MEMORY_POLICY_PROMPT}\n\n`), mode.id);
     // モードの指示 → 記憶の方針 → 実行環境 → 教室共通のルール → 優先順位の指示、の順に並ぶ。
-    assert.ok(prompt.endsWith(`その指定を優先してください。\n\n${CLASSROOM_RULES_PROMPT}\n\n${mode.replyChecklist}`), mode.id);
+    assert.ok(prompt.endsWith(`その指定を優先してください。\n\n${CLASSROOM_RULES_PROMPT}`), mode.id);
     for (const pattern of [/`uv`/, /`gh`/, /`pyxel`/, /利用者の指定と制約を優先/]) assert.match(prompt, pattern, mode.id);
     // 使えるツールは、モードの定義のまま。
     assert.deepEqual(applied.at(-1), [...mode.tools], mode.id);
@@ -181,7 +181,7 @@ test("作業フォルダの中のファイルは、指示に入れない", () =>
     await handlers.get("session_start")({ reason: "startup" }, context);
     const prompt = await ask();
     assert.doesNotMatch(prompt, /CWD_MARKER/);
-    assert.ok(prompt.endsWith(getDefaultMode().replyChecklist));
+    assert.ok(prompt.endsWith(CLASSROOM_RULES_PROMPT));
     assert.equal(existsSync(oldRulesPath), false);
   } finally {
     rmSync(cwd, { recursive: true, force: true });
