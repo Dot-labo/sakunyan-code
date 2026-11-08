@@ -10,6 +10,8 @@ import { OpenRouter, validateJudgment } from '../eval/provider.mjs';
 import { applyEdits, runScenario } from '../eval/runner.mjs';
 import { fakeProvider, fakeSubject } from '../eval/fake.mjs';
 import { createSubject } from '../eval/subject.mjs';
+import { main } from '../eval/cli.mjs';
+import { BudgetStop, OutputLimit } from '../eval/provider.mjs';
 import { report } from '../eval/report.mjs';
 const catalog=await loadCatalog();
 async function temp(fn){const dir=await mkdtemp(resolve(tmpdir(),'sakunyan-eval-test-'));try{await fn(dir);}finally{await rm(dir,{recursive:true,force:true});}}
@@ -121,7 +123,7 @@ test('length termination for any role is unscored and recorded as incomplete',as
    return original(model,messages,reasoning,role);
   };
   const run=await runScenario(catalog.scenarios.S01,catalog,{provider,subjectFactory:role==='sakunyan'?factory:fakeSubject});
-  assert.equal(run.status,'incomplete');assert.equal(run.score,null);assert.deepEqual(run.checks,{});assert.equal(calls,role==='student'?2:1);assert.equal(provider.spent,.00001*calls);const count=calls;await assert.rejects(provider.request({model:'fake'},role),/停止/);assert.equal(calls,count);
+  assert.equal(run.status,'incomplete');assert.equal(run.score,null);assert.deepEqual(run.checks,{});assert.equal(calls,role==='student'?2:1);assert.equal(provider.spent,.00001*calls);assert.equal(provider.stopped,false);const count=calls;await assert.rejects(provider.request({model:'fake',stream:role==='sakunyan'},role),OutputLimit);assert.equal(calls,count+1);
   assert.match(run.error,/出力が上限/);
   const text=report({runs:[run],models:{},budget:.8,spent:provider.spent});assert.match(text,/未完了/);assert.match(text,/未採点/);
  }
@@ -226,6 +228,7 @@ test('raw judge content is retained even when output hits the length limit',asyn
    let subjectContext;
    const run=await runScenario(scenario,catalog,{provider,subjectFactory:async context=>{subjectContext=context;return fakeSubject(context);}});
    assert.equal(run.status,'complete');assert.equal(subjectContext.os,catalog.personas[scenario.persona].os);
+   assert.ok(students.every(s=>s.includes('path は作業フォルダ（project_path）からの相対パス')));
    const context=students.map(s=>JSON.parse(s.slice(s.indexOf('{"persona"'))));
    assert.ok(!Object.hasOwn(context[0].task,'obstacles'));assert.deepEqual(context[1].task.obstacles,catalog.tasks[scenario.task].obstacles);
    assert.equal(context[0].project_path,run.turns[0].cwd);assert.equal(context[0].home_path,subjectContext.home);assert.equal(context[1].home_path,subjectContext.home);assert.match(context[0].terminal_initial_location,/home_path/);assert.match(context[0].terminal_initial_location,/架空.*作らない/);
@@ -307,4 +310,30 @@ test('student reasoning can disable reasoning with none',async()=>{
  let body;
  const provider=new OpenRouter(catalog.config,'synthetic',async(_url,options)=>{body=JSON.parse(options.body);return new Response(JSON.stringify({usage:{cost:0},choices:[{finish_reason:'stop',message:{content:'{}'}}]}));});
  await provider.json('fake',[],'none','student');assert.deepEqual(body.reasoning,{effort:'none'});
+});
+
+test('absolute edits stay within the project and reject symlinks',async()=>temp(async dir=>{
+ await applyEdits(dir,[{path:resolve(dir,'nested/file.txt'),content:'ok'}]);
+ assert.equal(await readFile(resolve(dir,'nested/file.txt'),'utf8'),'ok');
+ for(const path of [resolve(dir,'../outside'),dir+'-sibling/file',resolve(dir,'nested/../../outside')])await assert.rejects(applyEdits(dir,[{path,content:'bad'}]),/外/);
+ await symlink(resolve(dir,'nested'),resolve(dir,'link'));
+ await assert.rejects(applyEdits(dir,[{path:resolve(dir,'link/file.txt'),content:'bad'}]),/リンク/);
+ assert.equal(await readFile(resolve(dir,'nested/file.txt'),'utf8'),'ok');
+}));
+test('daily records all six scenarios after ordinary or output-limit failures, but stops for budget',async()=>{
+ for(const failure of [new Error('edit failed'),new OutputLimit('output limit'),new BudgetStop('budget limit')])await temp(async dir=>{
+  const provider=fakeProvider(),json=provider.json.bind(provider);let calls=0;
+  provider.json=async(...args)=>{if(++calls===1)throw failure;return json(...args);};
+  const previousExitCode=process.exitCode;
+  try {
+   await main(['--fake','--daily','--output',dir],{provider,subjectFactory:fakeSubject});
+   assert.equal(process.exitCode,1);
+   const result=JSON.parse(await readFile(resolve(dir,'runs/latest-fake.json'),'utf8'));
+   assert.equal(result.runs.length,failure instanceof BudgetStop?1:6);
+   assert.equal(result.runs[0].status,'incomplete');assert.equal(result.runs[0].score,null);
+   assert.ok(result.runs.slice(1).every(r=>r.status==='complete'));
+   const text=await readFile(resolve(dir,'report.md'),'utf8');assert.match(text,/未完了/);
+   for(const run of result.runs)assert.ok(text.includes(run.id));
+  } finally {process.exitCode=previousExitCode;}
+ });
 });
