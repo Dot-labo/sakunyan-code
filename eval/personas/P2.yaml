@@ -10,6 +10,7 @@
     "めんどい",
     "時間ない"
   ],
-  "os": "学校の Windows",
-  "grade_band": "middle"
+  "os": "Windows",
+  "grade_band": "middle",
+  "place": "学校"
 }

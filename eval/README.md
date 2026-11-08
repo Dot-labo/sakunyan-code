@@ -12,11 +12,11 @@ node eval/cli.mjs --daily
 node eval/cli.mjs --matrix --tasks python-name --modes advisor,tutor
 ```
 
-実行前に `npm run build` が必要です。`dist/` がない場合、実モデルの CLI はビルドを案内して停止します。暗号化済み `.env.eval` の開発用キーは、上記の dotenvx コマンドで実行プロセスに渡します。復号鍵を探したり、新しく作ったりしないでください。
+実行前に `npm run build` が必要です。`dist/` がない場合、`--fake` を含む CLI はビルドを案内して停止します。暗号化済み `.env.eval` の開発用キーは、上記の dotenvx コマンドで実行プロセスに渡します。復号鍵を探したり、新しく作ったりしないでください。
 
 実モデルには **`SAKUNYAN_EVAL_OPENROUTER_KEY` だけ**を使います。未設定なら実行前に止まります。他のキーや保存済み認証情報は使いません。キーを引数・YAML・レポートに書かないでください。
 
-- `personas/`: 年齢・経験・気質・スタンス・入力例・OS。OS は生徒の発言と本体の OS 判定に反映します。**本番との差分として**、隔離 worker が本体を読み込む間だけ `process.platform` と ChromeOS 検出用のファイル参照を差し替えます（macOS → darwin、Windows → win32、Chromebook → linux + ChromeOS、Linux → linux）。実際のファイルシステムやコマンド実行環境はホストのままで、OS 自体を再現するものではありません。
+- `personas/`: 年齢・経験・気質・スタンス・入力例・OS・場所。`os` は macOS / Windows / Chromebook / Linux のいずれか、`place` は学校・家などを指定し、`--validate` で OS を検査します。OS は生徒の発言と本体の OS 判定に反映します。**本番との差分として**、隔離 worker が本体を読み込む間だけ `process.platform` と ChromeOS 検出用のファイル参照を差し替えます（macOS → darwin、Windows → win32、Chromebook → linux + ChromeOS、Linux → linux）。実際のファイルシステムやコマンド実行環境はホストのままで、OS 自体を再現するものではありません。
 - `tasks/`: 目的・種類・つまずき・完成形。完成形は判定者だけに渡します。
 - `fixtures/`: 壊れたコードと合成データ。`memory.seed.yaml` は隔離 HOME にだけ展開する記憶の初期状態です。安全シナリオの秘密風文字列も架空です。
 - `criteria/`: 1 基準 1 ファイル。追加時は `id / name / observes / threshold / method / weight / kind` を指定します。`method: judge` は追加コードなしで有効になります。`machine` の新しい判定方法は `checks.mjs` に実装・登録します。削除した既存 C01〜C16 はシナリオの重みに残っていても無効になり、有効な基準を合計 100 に再計算します。新規基準の既定重みも自動適用します。任意の `modes: [tutor]` で対象モードを指定できます。C01・C02・C05 は tutor 専用です。対象外は判定せず、残りの基準で重みを合計100に再計算し、レポートに「対象外」と表示します。正規化した重みが0の基準は判定者へ渡しません。
@@ -44,6 +44,6 @@ node eval/cli.mjs --matrix --tasks python-name --modes advisor,tutor
 
 機械判定は字数、質問の句読点、禁止ツール、作業ファイルの変更、既知の指示追従マーカー、秘密風パス・出力、記憶の札の形式を確認します。C10 の記憶タイミングは `memory_required_turns`（既定は最初の返事）で指定された観測可能な場面を検査します。記憶内容の意味の矛盾や指示追従のあらゆる表現を網羅するものではありません。C01/C02/C11/C12 は文字一致・質問数などの観測値と会話を判定者へ渡します。判定 JSON の点・はい/いいえ・根拠の返事番号を検査します。`pass=true` は根拠の返事がなければ `evidence:[]` を許可し、`pass=false` は1つ以上の返事番号が必須です。JSON の解析・形式が不正なら同じ判定を1回だけ費用上限内で再試行し、再び不正なら未完了とします。各試行の生の返事を `runs/*.json` の `judge_responses` に保存します（評価用キーは保存時に除去）。
 
-出力は `report.md` と `runs/*.json`。`runs/` は git 除外です。`--output /tmp/eval-preview` で出力先を変更できます。偽物は `latest-fake.json` に分離され、品質評価と表示しません。全シナリオ未完了や失敗を合格として扱いません。初回は前回比較不可です。実モデルの会話をレポートへ載せる前には、個人情報などがないか確認してください。
+出力は `report.md` と `runs/*.json`。`runs/` は git 除外です。`--output /tmp/eval-preview` で出力先を変更できます。偽物は `latest-fake.json` に分離され、品質評価と表示しません。`--fake` も実際の worker と本体ランタイムを使い、ペルソナの OS 差し替えを通します。外部モデルへの通信だけを固定応答に置き換えます。全シナリオ未完了や失敗を合格として扱いません。初回は前回比較不可です。実モデルの会話をレポートへ載せる前には、個人情報などがないか確認してください。
 
 テストは `npm test`（ビルド込み）、評価のみならビルド後に `node --test test/eval.test.js`。APIキーは不要です。作業フォルダ・隔離 HOME・子プロセスは実行終了時に片付けます。

@@ -239,3 +239,36 @@ test('raw judge content is retained even when output hits the length limit',asyn
    if(mode==='advisor')assert.match(report({runs:[run],models:{},budget:.8,spent:0}),/C01 \| 対象外/);
   }
  });
+
+test('all catalog personas reach the actual worker OS prompt with fake transport', {timeout:60000},async()=>{
+ for(const persona of Object.values(catalog.personas)) {
+  assert.ok(['macOS','Windows','Chromebook','Linux'].includes(persona.os),persona.id);
+  assert.ok(persona.place,persona.id);
+  const provider=fakeProvider(),request=provider.request.bind(provider);let seen=false;
+  provider.request=async body=>{
+   const system=body.messages.filter(m=>m.role==='system').map(m=>m.content).join('\n');
+   assert.ok(system.includes(`利用者の実行環境は${persona.os}です。`),persona.id);
+   seen=true;return request(body);
+  };
+  const run=await runScenario({...catalog.scenarios.S01,persona:persona.id},catalog,{provider});
+  assert.equal(run.status,'complete',`${persona.id}: ${run.error}`);assert.ok(seen,persona.id);
+ }
+});
+
+test('catalog validation rejects descriptive and unsupported OS values',async()=>temp(async dir=>{
+ await cp(ROOT,dir,{recursive:true,filter:p=>!p.includes('/runs')});
+ const path=resolve(dir,'personas/P1.yaml');
+ for(const os of ['学校の macOS','unknown','']) {
+  await writeFile(path,JSON.stringify({...catalog.personas.P1,os}));
+  await assert.rejects(loadCatalog(dir),/os/);
+ }
+}));
+
+test('fake CLI uses worker and completes S01 offline', {timeout:30000},async()=>temp(async dir=>{
+ const result=spawnSync(process.execPath,[new URL('../eval/cli.mjs',import.meta.url).pathname,'--fake','--scenario','S01','--output',dir],{encoding:'utf8',env:{PATH:process.env.PATH},timeout:25000});
+ assert.equal(result.status,0,result.stderr);
+ const data=JSON.parse(await readFile(resolve(dir,'runs/latest-fake.json'),'utf8'));
+ assert.equal(data.runs[0].status,'complete');
+ // fakeSubject supplies synthetic tool calls; the worker receives a text-only model response.
+ assert.deepEqual(data.runs[0].turns[0].calls,[]);
+}));

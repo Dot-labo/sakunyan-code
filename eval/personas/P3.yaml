@@ -10,6 +10,7 @@
     "どうしてこの方法なのですか",
     "自分で直してみます"
   ],
-  "os": "家の macOS",
-  "grade_band": "middle"
+  "os": "macOS",
+  "grade_band": "middle",
+  "place": "家"
 }

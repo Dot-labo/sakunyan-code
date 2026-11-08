@@ -13,7 +13,7 @@ function requireFields(obj, fields, label) {
 }
 export async function loadCatalog(root = ROOT) {
   const catalog = {};
-  for (const [kind, fields] of Object.entries({personas:['id','name','age_grade','experience','temperament','stance','examples','os','grade_band'],tasks:['id','objective','project_type','obstacles','completion','file'],criteria:['id','name','observes','threshold','method','weight','kind'],scenarios:['id','persona','task','fixture','mode','criteria','max_turns','goals']})) {
+  for (const [kind, fields] of Object.entries({personas:['id','name','age_grade','experience','temperament','stance','examples','os','place','grade_band'],tasks:['id','objective','project_type','obstacles','completion','file'],criteria:['id','name','observes','threshold','method','weight','kind'],scenarios:['id','persona','task','fixture','mode','criteria','max_turns','goals']})) {
     catalog[kind] = {};
     for (const file of (await readdir(resolve(root,kind))).filter(f=>f.endsWith('.yaml')).sort()) {
       const obj = parse(await readFile(resolve(root,kind,file),'utf8'));
@@ -28,6 +28,7 @@ export async function loadCatalog(root = ROOT) {
   for(const role of ['sakunyan','student','judge'])for(const key of ['max_output_tokens','max_price_prompt','max_price_completion']){const value=catalog.config.roles?.[role]?.[key];if(!Number.isFinite(value)||value<=0||(key==='max_output_tokens'&&!Number.isInteger(value)))throw new Error(`config.yaml: roles.${role}.${key} が不正です`);}
   if(!Number.isFinite(catalog.config.pass_score)||catalog.config.pass_score<0||catalog.config.pass_score>100)throw new Error('config.yaml: pass_score が不正です');
   for (const p of Object.values(catalog.personas)) if (!Array.isArray(p.examples) || p.examples.length<3 || p.examples.length>5) throw new Error(`${p.id}: 入力例は3〜5文です`);
+  for (const p of Object.values(catalog.personas)) if (!['macOS','Windows','Chromebook','Linux'].includes(p.os)) throw new Error(`${p.id}: os は macOS / Windows / Chromebook / Linux のいずれかです`);
   for (const c of Object.values(catalog.criteria)) {
     if (!['machine','judge'].includes(c.method) || !['score','metric','overall'].includes(c.kind) || !Number.isFinite(c.weight) || c.weight<0) throw new Error(`${c.id}: 基準の定義が不正です`);
     if (c.modes !== undefined && (!Array.isArray(c.modes) || !c.modes.length || c.modes.some(m=>!['advisor','tutor'].includes(m)))) throw new Error(`${c.id}: modes が不正です`);

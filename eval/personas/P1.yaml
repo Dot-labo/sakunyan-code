@@ -10,6 +10,7 @@
     "なまえでない",
     "どこ"
   ],
-  "os": "学校の macOS",
-  "grade_band": "middle"
+  "os": "macOS",
+  "grade_band": "middle",
+  "place": "学校"
 }

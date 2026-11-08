@@ -10,6 +10,7 @@
     "この方法を選ぶ理由は何ですか",
     "自分のペースで考えたい"
   ],
-  "os": "家の macOS",
-  "grade_band": "adult"
+  "os": "macOS",
+  "grade_band": "adult",
+  "place": "家"
 }

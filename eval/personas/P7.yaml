@@ -10,6 +10,7 @@
     "もうおわる",
     "どこなおす"
   ],
-  "os": "家の macOS",
-  "grade_band": "primary"
+  "os": "macOS",
+  "grade_band": "primary",
+  "place": "家"
 }
