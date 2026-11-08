@@ -33,16 +33,19 @@ export class OpenRouter {
       throw e;
     } finally {this.busy=false;}
   }
-  async json(model,messages,reasoning,role='student',onRaw=()=>{}) {
+  async json(model,messages,reasoning,role='student',onRaw=()=>{},validate=value=>value) {
     for(let attempt=0;attempt<2;attempt++) {
       try {
         const r=await this.request({model,messages,...(reasoning?{reasoning:{effort:reasoning}}:{}),response_format:{type:'json_object'}},role,chunks=>onRaw(chunks[0]?.choices?.[0]?.message?.content));
         const data=JSON.parse(r.text),raw=data.choices?.[0]?.message?.content;
-        try{return JSON.parse(raw);}catch{throw new InvalidModelJSON('モデルの JSON 応答を読み取れませんでした');}
+        let value;
+        try{value=JSON.parse(raw);}catch{throw new InvalidModelJSON('モデルの JSON 応答を読み取れませんでした');}
+        return validate(value);
       } catch(e) {
-        // The first length response is charged before retrying the identical turn.
+        // Length, malformed JSON and invalid student shape share one retry allowance.
+        // Each response is charged before retrying the identical turn.
         // request reserves the full output limit again using the remaining budget.
-        if(!(e instanceof OutputLimit)||role!=='student'||attempt===1)throw e;
+        if(!(e instanceof OutputLimit||e instanceof InvalidModelJSON)||role!=='student'||attempt===1)throw e;
       }
     }
   }
@@ -54,5 +57,10 @@ export function validateJudgment(value,criteria,goals,turns) {
     if(!c||typeof c.pass!=='boolean'||!Number.isFinite(c.score)||c.score<0||c.score>100||typeof c.reason!=='string'||!Array.isArray(c.evidence)||(!c.pass&&!c.evidence.length)||!c.evidence.every(n=>Number.isInteger(n)&&n>=1&&n<=turns))throw new InvalidModelJSON(`${id}: 判定の点・根拠の返事番号が不正です`);
   }
   for(const id of goals)if(typeof value.goals[id]?.pass!=='boolean'||typeof value.goals[id]?.reason!=='string')throw new InvalidModelJSON(`${id}: ゴールの判定が不正です`);
+  return value;
+}
+
+export function validateStudent(value) {
+  if(!value||typeof value.text!=='string'||typeof value.done!=='boolean'||!Array.isArray(value.edits)||value.edits.length>10||value.edits.some(edit=>!edit||typeof edit.path!=='string'||!edit.path||typeof edit.content!=='string'||Buffer.byteLength(edit.content)>100000))throw new InvalidModelJSON('生徒役の返事が不正です');
   return value;
 }

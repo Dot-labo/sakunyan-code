@@ -64,7 +64,7 @@ test('production runtime uses both unchanged mode prompts through actual selecti
   const cwd=resolve(dir,mode+os),home=resolve(cwd,'home');await mkdir(home,{recursive:true});
   let seen;
   const provider=new OpenRouter(catalog.config,'fake',async (_url,options)=>{const body=JSON.parse(options.body);seen=body;const data={id:'test',object:'chat.completion.chunk',created:1,model:body.model,choices:[{index:0,delta:{role:'assistant',content:'動作確認です。'},finish_reason:null}]};return new Response(`data: ${JSON.stringify(data)}\n\ndata: ${JSON.stringify({...data,choices:[{index:0,delta:{},finish_reason:'stop'}],usage:{cost:.00001,prompt_tokens:1,completion_tokens:1,total_tokens:2}})}\n\ndata: [DONE]\n\n`,{headers:{'content-type':'text/event-stream'}});});
-  const subject=await createSubject({cwd,home,mode,os,provider});try{const turn=await subject.turn('こんにちは');assert.match(turn.assistant,/動作確認/);assert.deepEqual(seen.reasoning,productionReasoning);assert.equal(seen.max_completion_tokens,catalog.config.roles.sakunyan.max_output_tokens);assert.ok(!Object.hasOwn(seen,'max_tokens'));const system=seen.messages.filter(m=>m.role==='system').map(m=>m.content).join('\n');assert.ok(system.includes(`利用者の実行環境は${os}です。`),system);const checklist=system.slice(system.lastIndexOf('## 返事を出す直前の最終チェック'));assert.ok(checklist.includes(mode==='tutor'?'200字以内':'300字以内'));assert.ok(!checklist.includes(mode==='tutor'?'300字以内':'200字以内'));assert.match(checklist,/返事を書く前に、新しく分かった事実/);assert.match(checklist,/target.*daily/);assert.match(checklist,/WindowsのPowerShell/);assert.ok(system.lastIndexOf('## 返事を出す直前の最終チェック')>system.lastIndexOf('</classroom_rules>'));if(mode==='tutor')assert.match(checklist,/問いは返事全体で最大1つ/);assert.match(system,mode==='tutor'?/4段より前に/:/教育アドバイザー/);assert.ok(!seen.tools.some(t=>['bash','write','edit'].includes(t.function.name)));assert.deepEqual(turn.first_request_tools,seen.tools.map(t=>t.function.name));for(const name of ['memory_write','memory_read','memory_forget','memory_restore'])assert.ok(turn.first_request_tools.includes(name),`${mode}: ${name}`);}finally{await subject.close();}
+  const subject=await createSubject({cwd,home,mode,os,provider});try{const turn=await subject.turn('こんにちは');assert.match(turn.assistant,/動作確認/);assert.deepEqual(seen.reasoning,productionReasoning);assert.equal(seen.max_completion_tokens,catalog.config.roles.sakunyan.max_output_tokens);assert.ok(!Object.hasOwn(seen,'max_tokens'));const system=seen.messages.filter(m=>m.role==='system').map(m=>m.content).join('\n');assert.ok(system.includes(`利用者の実行環境は${os}です。`),system);const checklist=system.slice(system.lastIndexOf('## 返事を出す直前の最終チェック'));assert.ok(checklist.includes(mode==='tutor'?'200字以内':'300字以内'));assert.ok(!checklist.includes(mode==='tutor'?'300字以内':'200字以内'));assert.match(checklist,/返事を書く前に、新しく分かった事実/);assert.match(checklist,/target.*daily/);assert.match(checklist,/句点「。」は文末の1つだけ/);assert.match(checklist,/次の2回の呼び出しに分ける/);assert.match(checklist,/末尾の「試して結果を教えて/);assert.match(checklist,mode==='tutor'?/100字程度/:/160字程度/);assert.match(checklist,/WindowsのPowerShell/);assert.ok(system.lastIndexOf('## 返事を出す直前の最終チェック')>system.lastIndexOf('</classroom_rules>'));if(mode==='tutor')assert.match(checklist,/問いは返事全体で最大1つ/);assert.match(system,mode==='tutor'?/4段より前に/:/教育アドバイザー/);assert.ok(!seen.tools.some(t=>['bash','write','edit'].includes(t.function.name)));assert.deepEqual(turn.first_request_tools,seen.tools.map(t=>t.function.name));for(const name of ['memory_write','memory_read','memory_forget','memory_restore'])assert.ok(turn.first_request_tools.includes(name),`${mode}: ${name}`);}finally{await subject.close();}
  }
 }));
 
@@ -410,4 +410,40 @@ test('unseeded conversations fail C10 without any writes, including tutor and ma
  assert.equal(machineCheck('C10',{memory_required_any:true,turns:malformed}).pass,false);
  assert.equal(machineCheck('C10',{memory_required_any:true,memory_required_turns:[1],turns:later}).pass,false);
  await assert.rejects(validateScenario({...catalog.scenarios.S02,memory_required_any:'true'},catalog),/memory_required_any/);
+});
+
+test('student malformed JSON or shape retries once before a turn is used and charges both responses',async()=>{
+ const invalid=['{', 'null', '[]', JSON.stringify({text:'不正',done:'false',edits:[]}), JSON.stringify({text:'不正',done:false}), JSON.stringify({text:'不正',done:false,edits:[{path:'main.py'}]})];
+ for(const raw of invalid){
+  const bodies=[];let turns=0;
+  const provider=new OpenRouter(catalog.config,'synthetic',async(_url,options)=>{
+   bodies.push(JSON.parse(options.body));
+   return new Response(JSON.stringify({usage:{cost:.00001},choices:[{finish_reason:'stop',message:{content:bodies.length===1?raw:JSON.stringify({text:'正しい入力',done:true,edits:[]})}}]}));
+  });
+  const original=provider.json.bind(provider);
+  provider.json=(model,messages,reasoning,role,...rest)=>role==='student'?original(model,messages,reasoning,role,...rest):fakeProvider().json(model,messages);
+  const run=await runScenario(catalog.scenarios.S01,catalog,{provider,subjectFactory:async()=>({turn:async text=>{turns++;assert.equal(text,'正しい入力');return {assistant:'助言',calls:[]};},close:async()=>{}})});
+  assert.equal(run.status,'complete',raw);assert.equal(turns,1);assert.equal(bodies.length,2);assert.deepEqual(bodies[0],bodies[1]);assert.equal(provider.spent,.00002);assert.equal(run.usage.length,2);
+ }
+});
+
+test('student invalid shape shares the length retry limit and respects budget and fatal transport failures',async()=>{
+ for(const outcome of ['invalid-twice','length-then-invalid','invalid-then-length','budget','missing-cost','http']){
+  const config=structuredClone(catalog.config);let requests=0,turns=0;
+  const provider=new OpenRouter(config,'synthetic',async()=>{
+   requests++;
+   if(outcome==='http')return new Response('{}',{status:500});
+   if(outcome==='budget')config.budget_usd=.00001;
+   const length=(outcome==='length-then-invalid'&&requests===1)||(outcome==='invalid-then-length'&&requests===2);
+   return new Response(JSON.stringify({usage:outcome==='missing-cost'?{}:{cost:.00001},choices:[{finish_reason:length?'length':'stop',message:{content:'{}'}}]}));
+  });
+  const original=provider.json.bind(provider);
+  provider.json=(model,messages,reasoning,role,...rest)=>role==='student'?original(model,messages,reasoning,role,...rest):fakeProvider().json(model,messages);
+  const run=await runScenario(catalog.scenarios.S08,{...catalog,config},{provider,subjectFactory:async()=>({turn:async()=>{turns++;return {assistant:'unused',calls:[]};},close:async()=>{}})});
+  assert.equal(run.status,'incomplete',outcome);assert.equal(run.score,null);assert.deepEqual(run.checks,{});assert.equal(turns,0);
+  assert.equal(requests,['budget','missing-cost','http'].includes(outcome)?1:2,outcome);
+  assert.equal(run.budget_stopped,['budget','missing-cost','http'].includes(outcome),outcome);
+  if(outcome==='invalid-twice')assert.match(run.error,/生徒役の返事が不正/);
+  assert.equal(provider.spent,requests*.00001*(['missing-cost','http'].includes(outcome)?0:1));
+ }
 });
