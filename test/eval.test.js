@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, cp, rm, readFile, writeFile, mkdir, symlink } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { loadCatalog, weights, matrix, dailySample, ROOT } from '../eval/catalog.mjs';
+import { loadCatalog, weights, matrix, dailySample, validateScenario, ROOT } from '../eval/catalog.mjs';
 import { machineCheck, fixtureGoal } from '../eval/checks.mjs';
 import { OpenRouter, validateJudgment } from '../eval/provider.mjs';
 import { applyEdits, runScenario } from '../eval/runner.mjs';
@@ -228,7 +228,7 @@ test('raw judge content is retained even when output hits the length limit',asyn
    assert.equal(run.status,'complete');assert.equal(subjectContext.os,catalog.personas[scenario.persona].os);
    const context=students.map(s=>JSON.parse(s.slice(s.indexOf('{"persona"'))));
    assert.ok(!Object.hasOwn(context[0].task,'obstacles'));assert.deepEqual(context[1].task.obstacles,catalog.tasks[scenario.task].obstacles);
-   assert.equal(context[0].project_path,run.turns[0].cwd);assert.match(context[0].terminal_initial_location,/ホーム/);
+   assert.equal(context[0].project_path,run.turns[0].cwd);assert.equal(context[0].home_path,subjectContext.home);assert.equal(context[1].home_path,subjectContext.home);assert.match(context[0].terminal_initial_location,/home_path/);assert.match(context[0].terminal_initial_location,/架空.*作らない/);
    assert.match(judge[0].content,/減点の理由にしない/);
    for(const id of ['C01','C02','C05']) {
     assert.equal(Object.hasOwn(run.checks,id),mode==='tutor');
@@ -272,3 +272,11 @@ test('fake CLI uses worker and completes S01 offline', {timeout:30000},async()=>
  // fakeSubject supplies synthetic tool calls; the worker receives a text-only model response.
  assert.deepEqual(data.runs[0].turns[0].calls,[]);
 }));
+
+ test('focus rejects mode-inapplicable criteria and permits tutor focus',async()=>{
+  for(const id of ['C01','C02','C05']) {
+   await assert.rejects(validateScenario({...catalog.scenarios.S01,focus:[id]},catalog),/focus.*対象外/);
+   await validateScenario({...catalog.scenarios.S01,mode:'tutor',focus:[id]},catalog);
+  }
+  for(const scenario of Object.values(catalog.scenarios))await validateScenario(scenario,catalog);
+ });

@@ -49,6 +49,15 @@ export async function validateScenario(s,catalog,root=ROOT) {
     if (!catalog.criteria[id] && !/^C(0[1-9]|1[0-6])$/.test(id)) throw new Error(`${s.id}: 知らない基準 ${id}`);
     if (!Number.isFinite(w)||w<0) throw new Error(`${s.id}: 重みが不正です`);
   }
+  if (s.focus !== undefined && !Array.isArray(s.focus)) throw new Error(`${s.id}: focus は基準の配列です`);
+  for (const id of s.focus??[]) {
+    const criterion=catalog.criteria[id];
+    if (!criterion) {
+      if (!/^C(0[1-9]|1[0-6])$/.test(id)) throw new Error(`${s.id}: focus に知らない基準 ${id}`);
+      continue; // Deleted criteria remain inactive, just like criteria overrides.
+    }
+    if (!appliesToMode(criterion,s.mode)) throw new Error(`${s.id}: focus の ${id} は ${s.mode} の対象外です`);
+  }
   if (!Array.isArray(s.goals)||!s.goals.length) throw new Error(`${s.id}: ゴールがありません`);
   const ids=new Set();
   for (const g of s.goals) {
