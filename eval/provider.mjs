@@ -1,7 +1,8 @@
+export class InvalidModelJSON extends Error {}
 export class BudgetStop extends Error {}
 export class OpenRouter {
   constructor(config,key,fetcher=fetch) {this.config=config;this.key=key;this.fetcher=fetcher;this.spent=0;this.usage=[];this.busy=false;this.stopped=false;}
-  async request(body,role='sakunyan') {
+  async request(body,role='sakunyan',onResponse=()=>{}) {
     if(this.busy||this.stopped)throw new BudgetStop('費用を安全に確認できないため停止しました');
     const c=this.config,limits=c.roles[role];
     if(!limits)throw new Error(`知らないモデルの役: ${role}`);
@@ -19,6 +20,7 @@ export class OpenRouter {
       if(!response.ok){this.stopped=true;throw new Error(`OpenRouter が失敗しました (HTTP ${response.status})`);}
       const chunks=body.stream?text.split('\n').filter(l=>l.startsWith('data: ')&&l!=='data: [DONE]').map(l=>JSON.parse(l.slice(6))):[JSON.parse(text)];
       if(chunks.some(x=>x.error)){this.stopped=true;throw new Error('OpenRouter の応答にエラーがありました');}
+      onResponse(chunks);
       const usage=chunks.findLast(x=>x.usage)?.usage;
       if(!Number.isFinite(usage?.cost)||usage.cost<0){this.stopped=true;throw new BudgetStop('使用料金が返らなかったため、追加の呼び出しを止めました');}
       this.spent+=usage.cost;this.usage.push({role,model:body.model,...usage});
@@ -27,17 +29,18 @@ export class OpenRouter {
       return {status:response.status,headers:{'content-type':response.headers.get('content-type')??'application/json'},text};
     } finally {this.busy=false;}
   }
-  async json(model,messages,reasoning,role='student') {
-    const r=await this.request({model,messages,...(reasoning?{reasoning:{effort:reasoning}}:{}),response_format:{type:'json_object'}},role);
-    const data=JSON.parse(r.text);try{return JSON.parse(data.choices[0].message.content);}catch{throw new Error('モデルの JSON 応答を読み取れませんでした');}
+  async json(model,messages,reasoning,role='student',onRaw=()=>{}) {
+    const r=await this.request({model,messages,...(reasoning?{reasoning:{effort:reasoning}}:{}),response_format:{type:'json_object'}},role,chunks=>onRaw(chunks[0]?.choices?.[0]?.message?.content));
+    const data=JSON.parse(r.text),raw=data.choices?.[0]?.message?.content;
+    try{return JSON.parse(raw);}catch{throw new InvalidModelJSON('モデルの JSON 応答を読み取れませんでした');}
   }
 }
 export function validateJudgment(value,criteria,goals,turns) {
-  if(!value||typeof value.checks!=='object'||typeof value.goals!=='object')throw new Error('判定の JSON に checks / goals がありません');
+  if(!value||!value.checks||typeof value.checks!=='object'||!value.goals||typeof value.goals!=='object')throw new InvalidModelJSON('判定の JSON に checks / goals がありません');
   for(const id of criteria) {
     const c=value.checks[id];
-    if(!c||typeof c.pass!=='boolean'||!Number.isFinite(c.score)||c.score<0||c.score>100||typeof c.reason!=='string'||!Array.isArray(c.evidence)||!c.evidence.length||!c.evidence.every(n=>Number.isInteger(n)&&n>=1&&n<=turns))throw new Error(`${id}: 判定の点・根拠の返事番号が不正です`);
+    if(!c||typeof c.pass!=='boolean'||!Number.isFinite(c.score)||c.score<0||c.score>100||typeof c.reason!=='string'||!Array.isArray(c.evidence)||(!c.pass&&!c.evidence.length)||!c.evidence.every(n=>Number.isInteger(n)&&n>=1&&n<=turns))throw new InvalidModelJSON(`${id}: 判定の点・根拠の返事番号が不正です`);
   }
-  for(const id of goals)if(typeof value.goals[id]?.pass!=='boolean'||typeof value.goals[id]?.reason!=='string')throw new Error(`${id}: ゴールの判定が不正です`);
+  for(const id of goals)if(typeof value.goals[id]?.pass!=='boolean'||typeof value.goals[id]?.reason!=='string')throw new InvalidModelJSON(`${id}: ゴールの判定が不正です`);
   return value;
 }
