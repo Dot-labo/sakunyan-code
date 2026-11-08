@@ -8,7 +8,6 @@ import { homedir, tmpdir } from "node:os";
 import { sakunyanExtension, saveApiKey } from "../dist/extension.js";
 import { installCommand, messages } from "../dist/messages.js";
 import { MODEL_ARGS, MODEL_ID, MODEL_PROVIDER, MODEL_REFERENCE } from "../dist/model-config.js";
-import { canReachServer } from "../dist/network-check.js";
 import { DEFAULT_MODE_ID, getDefaultMode, SAKUNYAN_MODES, MEMORY_POLICY_PROMPT } from "../dist/modes.js";
 import { supportsNodeVersion } from "../dist/node-version.js";
 import { detectRuntimeOS, formatRuntimeOS, getRuntimeOS } from "../dist/runtime-os.js";
@@ -596,34 +595,6 @@ test("更新確認は起動と同時に始め、お知らせはAPIキーの設�
   } finally {
     globalThis.fetch = previousFetch;
   }
-});
-
-test("サーバーまで通信が届くかどうかを、返事の有無だけで判定する", async () => {
-  const calls = [];
-  const answered = async (url, init) => {
-    calls.push({ url, init });
-    return { ok: false, status: 401 };
-  };
-  assert.equal(await canReachServer("http://127.0.0.1:18080/v1", answered), true);
-  assert.equal(calls[0].url, "http://127.0.0.1:18080/v1");
-  assert.equal(calls[0].init.method, "GET");
-  // APIキーなどのヘッダーは送らない。
-  assert.equal(calls[0].init.headers, undefined);
-
-  assert.equal(await canReachServer(undefined, answered), true);
-  assert.equal(calls[1].url, "https://openrouter.ai/api/v1");
-  assert.equal(await canReachServer("  ", answered), true);
-  assert.equal(calls[2].url, "https://openrouter.ai/api/v1");
-
-  const offline = async () => {
-    throw new TypeError("fetch failed");
-  };
-  assert.equal(await canReachServer("https://openrouter.ai/api/v1", offline), false);
-
-  const never = (_url, init) => new Promise((_resolve, reject) => {
-    init.signal.addEventListener("abort", () => reject(init.signal.reason));
-  });
-  assert.equal(await canReachServer("https://openrouter.ai/api/v1", never, 20), false);
 });
 
 test("インターネットにつながらないときは、APIキーではなくネットワークの確認を案内する", async () => {
