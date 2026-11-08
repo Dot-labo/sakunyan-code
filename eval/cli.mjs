@@ -8,7 +8,7 @@ import { OpenRouter } from './provider.mjs';
 import { runScenario } from './runner.mjs';
 import { report } from './report.mjs';
 import { fakeProvider } from './fake.mjs';
-export async function main(args=process.argv.slice(2)) {
+export async function main(args=process.argv.slice(2),{provider:injectedProvider,subjectFactory}={}) {
   const options={};
   for(let i=0;i<args.length;i++) {
     const key=args[i];
@@ -38,7 +38,7 @@ export async function main(args=process.argv.slice(2)) {
   for(const s of scenarios)await validateScenario(s,catalog);
   if(options['--daily'])scenarios=dailySample(scenarios,catalog.personas);
   const output=resolve(options['--output']??ROOT);await mkdir(resolve(output,'runs'),{recursive:true});
-  const provider=options['--fake']?fakeProvider():new OpenRouter(c,key);
+  const provider=injectedProvider??(options['--fake']?fakeProvider():new OpenRouter(c,key));
   const pkg=JSON.parse(await readFile(new URL('../package.json',import.meta.url),'utf8'));
   let commit='unknown';try{commit=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();}catch{}
   const modelSource=await readFile(new URL('../src/model-config.ts',import.meta.url),'utf8');
@@ -48,12 +48,12 @@ export async function main(args=process.argv.slice(2)) {
   const latest=resolve(output,'runs',options['--fake']?'latest-fake.json':'latest.json');
   let previous;try{previous=JSON.parse(await readFile(latest,'utf8'));}catch{}
   for(const s of scenarios) {
-    const run=await runScenario(s,catalog,{provider});result.runs.push(run);result.spent=provider.spent;
+    const run=await runScenario(s,catalog,{provider,subjectFactory});result.runs.push(run);result.spent=provider.spent;
     // Raw results stay local. Strip the only allowed key even if a provider echoes it.
     const serialize=value=>JSON.stringify(value,null,2).split(key||'\0').join('[REDACTED]');
     await writeFile(resolve(output,'runs',`${result.date.replaceAll(':','-')}${result.fake?'-fake':''}.json`),serialize(result),{mode:0o600});
     await writeFile(resolve(output,'report.md'),report(JSON.parse(serialize(result)),previous));
-    if(run.status!=='complete')break;
+    if(run.budget_stopped)break;
   }
   await writeFile(latest,JSON.stringify(result,null,2).split(key||'\0').join('[REDACTED]'),{mode:0o600});
   console.log(`評価 ${result.runs.length}本を保存しました: ${resolve(output,'report.md')}${result.fake?'（偽物の動作確認）':''}`);
