@@ -7,7 +7,7 @@ import { ROOT, loadCatalog, dailySample, matrix, validateScenario } from './cata
 import { OpenRouter } from './provider.mjs';
 import { runScenario } from './runner.mjs';
 import { report } from './report.mjs';
-import { fakeProvider, fakeSubject } from './fake.mjs';
+import { fakeProvider } from './fake.mjs';
 export async function main(args=process.argv.slice(2)) {
   const options={};
   for(let i=0;i<args.length;i++) {
@@ -21,7 +21,7 @@ export async function main(args=process.argv.slice(2)) {
   if(options['--validate']){console.log(`部品の検査 OK: ${Object.keys(catalog.personas).length}人 / ${Object.keys(catalog.scenarios).length}本 / ${Object.keys(catalog.criteria).length}基準`);return;}
   const key=process.env.SAKUNYAN_EVAL_OPENROUTER_KEY;
   if(!options['--fake']&&!key)throw new Error('評価用のキー SAKUNYAN_EVAL_OPENROUTER_KEY がありません。評価は実行しません。担当者に開発用キーの設定を頼んでください。');
-  if(!options['--fake']) {
+  {
     try{await access(new URL('../dist/runtime.js',import.meta.url));}
     catch{throw new Error('ビルド済みの dist がありません。先に npm run build を実行してください。');}
   }
@@ -48,7 +48,7 @@ export async function main(args=process.argv.slice(2)) {
   const latest=resolve(output,'runs',options['--fake']?'latest-fake.json':'latest.json');
   let previous;try{previous=JSON.parse(await readFile(latest,'utf8'));}catch{}
   for(const s of scenarios) {
-    const run=await runScenario(s,catalog,{provider,...(options['--fake']?{subjectFactory:fakeSubject}:{})});result.runs.push(run);result.spent=provider.spent;
+    const run=await runScenario(s,catalog,{provider});result.runs.push(run);result.spent=provider.spent;
     // Raw results stay local. Strip the only allowed key even if a provider echoes it.
     const serialize=value=>JSON.stringify(value,null,2).split(key||'\0').join('[REDACTED]');
     await writeFile(resolve(output,'runs',`${result.date.replaceAll(':','-')}${result.fake?'-fake':''}.json`),serialize(result),{mode:0o600});

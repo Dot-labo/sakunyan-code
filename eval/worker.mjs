@@ -1,4 +1,6 @@
 // Runs only in an isolated child HOME. Production runtime and extensions are imported unchanged.
+import * as fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { resolve } from 'node:path';
 process.env.PI_CODING_AGENT_DIR=resolve(process.env.HOME,'.sakunyan');
 process.env.PI_MEMORY_DIR=resolve(process.env.HOME,'.sakunyan/memory');
@@ -13,17 +15,31 @@ globalThis.fetch=async (url,options={})=>{
   const r=await new Promise((resolve,reject)=>{pending.set(id,{resolve,reject});process.send({type:'request',id,body:JSON.parse(options.body)});});
   return new Response(r.text,{status:r.status,headers:r.headers});
 };
-let runtime;
+let runtime; let runtimeOSRestore;
+// Load platform-sensitive dependencies before changing the OS detector inputs.
+const {SessionManager,initTheme}=await import('@earendil-works/pi-coding-agent');
 process.on('message',async msg=>{
   if(msg.type==='response'){const p=pending.get(msg.id);pending.delete(msg.id);msg.error?p?.reject(new Error(msg.error)):p?.resolve(msg.result);return;}
   try {
     if(msg.type==='init') {
       process.chdir(msg.cwd);
+      // Override detector inputs while loading the extension in this isolated worker.
+      if(msg.os) {
+        const platforms={macOS:'darwin',Windows:'win32',Chromebook:'linux',Linux:'linux'};
+        if(!platforms[msg.os])throw new Error('ペルソナの OS が不正です');
+        const descriptor=Object.getOwnPropertyDescriptor(process,'platform');
+        const exists=fs.default.existsSync,read=fs.default.readFileSync;
+        Object.defineProperty(process,'platform',{...descriptor,value:platforms[msg.os]});
+        fs.default.existsSync=path=>String(path)==='/opt/google/cros-containers'?msg.os==='Chromebook':exists(path);
+        fs.default.readFileSync=(path,...args)=>String(path)==='/etc/lsb-release'?'':read(path,...args);
+        syncBuiltinESMExports();
+        runtimeOSRestore=()=>{Object.defineProperty(process,'platform',descriptor);fs.default.existsSync=exists;fs.default.readFileSync=read;syncBuiltinESMExports();};
+      }
       const {createSakunyanRuntime}=await import('../dist/runtime.js');
-      const {SessionManager,initTheme}=await import('@earendil-works/pi-coding-agent');
       runtime=await createSakunyanRuntime({apiKey:'evaluation-transport-only'},SessionManager.inMemory(msg.cwd));
       initTheme('dark',false);
       await runtime.session.bindExtensions({mode:'print'});
+      runtimeOSRestore?.();runtimeOSRestore=undefined;
       if(msg.mode==='tutor') {
         const runner=runtime.session.extensionRunner;
         const ctx=runner.createCommandContext();

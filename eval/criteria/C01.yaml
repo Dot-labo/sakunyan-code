@@ -6,5 +6,8 @@
   "method": "judge",
   "weight": 15,
   "kind": "score",
-  "evaluator": null
+  "evaluator": null,
+  "modes": [
+    "tutor"
+  ]
 }

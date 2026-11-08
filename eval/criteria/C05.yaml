@@ -6,5 +6,8 @@
   "method": "machine",
   "weight": 5,
   "kind": "score",
-  "evaluator": "C05"
+  "evaluator": "C05",
+  "modes": [
+    "tutor"
+  ]
 }

@@ -10,6 +10,7 @@
     "わかりません",
     "また動かない"
   ],
-  "os": "学校の macOS",
-  "grade_band": "high"
+  "os": "macOS",
+  "grade_band": "high",
+  "place": "学校"
 }

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, cp, rm, readFile, writeFile, mkdir, symlink } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { loadCatalog, weights, matrix, dailySample, ROOT } from '../eval/catalog.mjs';
+import { loadCatalog, weights, matrix, dailySample, validateScenario, ROOT } from '../eval/catalog.mjs';
 import { machineCheck, fixtureGoal } from '../eval/checks.mjs';
 import { OpenRouter, validateJudgment } from '../eval/provider.mjs';
 import { applyEdits, runScenario } from '../eval/runner.mjs';
@@ -58,11 +58,11 @@ test('judge response requires score and numbered evidence',()=>{
 test('production runtime uses both unchanged mode prompts through actual selection handler', {timeout:30000},async()=>temp(async dir=>{
  const production=execFileSync(process.execPath,[new URL('./fixtures/eval-production-reasoning.js',import.meta.url).pathname],{cwd:dir,env:{PATH:process.env.PATH,HOME:dir,USERPROFILE:dir,SAKUNYAN_REASONING_PROBE:'1'},encoding:'utf8'});
  const productionReasoning=JSON.parse(production.match(/EVAL_REASONING:(.*)/)[1]);assert.deepEqual(productionReasoning,{effort:'high'});
- for(const mode of ['advisor','tutor']) {
-  const cwd=resolve(dir,mode),home=resolve(cwd,'home');await mkdir(home,{recursive:true});
+ for(const [mode,os] of [['advisor','macOS'],['tutor','Windows'],['advisor','Chromebook'],['tutor','Linux']]) {
+  const cwd=resolve(dir,mode+os),home=resolve(cwd,'home');await mkdir(home,{recursive:true});
   let seen;
   const provider=new OpenRouter(catalog.config,'fake',async (_url,options)=>{const body=JSON.parse(options.body);seen=body;const data={id:'test',object:'chat.completion.chunk',created:1,model:body.model,choices:[{index:0,delta:{role:'assistant',content:'動作確認です。'},finish_reason:null}]};return new Response(`data: ${JSON.stringify(data)}\n\ndata: ${JSON.stringify({...data,choices:[{index:0,delta:{},finish_reason:'stop'}],usage:{cost:.00001,prompt_tokens:1,completion_tokens:1,total_tokens:2}})}\n\ndata: [DONE]\n\n`,{headers:{'content-type':'text/event-stream'}});});
-  const subject=await createSubject({cwd,home,mode,provider});try{const turn=await subject.turn('こんにちは');assert.match(turn.assistant,/動作確認/);assert.deepEqual(seen.reasoning,productionReasoning);assert.equal(seen.max_completion_tokens,catalog.config.roles.sakunyan.max_output_tokens);assert.ok(!Object.hasOwn(seen,'max_tokens'));const system=seen.messages.filter(m=>m.role==='system').map(m=>m.content).join('\n');assert.match(system,mode==='tutor'?/4段より前に/:/教育アドバイザー/);assert.ok(!seen.tools.some(t=>['bash','write','edit'].includes(t.function.name)));}finally{await subject.close();}
+  const subject=await createSubject({cwd,home,mode,os,provider});try{const turn=await subject.turn('こんにちは');assert.match(turn.assistant,/動作確認/);assert.deepEqual(seen.reasoning,productionReasoning);assert.equal(seen.max_completion_tokens,catalog.config.roles.sakunyan.max_output_tokens);assert.ok(!Object.hasOwn(seen,'max_tokens'));const system=seen.messages.filter(m=>m.role==='system').map(m=>m.content).join('\n');assert.ok(system.includes(`利用者の実行環境は${os}です。`),system);assert.match(system,mode==='tutor'?/4段より前に/:/教育アドバイザー/);assert.ok(!seen.tools.some(t=>['bash','write','edit'].includes(t.function.name)));}finally{await subject.close();}
  }
 }));
 
@@ -121,7 +121,7 @@ test('length termination for any role is unscored and recorded as incomplete',as
    return original(model,messages,reasoning,role);
   };
   const run=await runScenario(catalog.scenarios.S01,catalog,{provider,subjectFactory:role==='sakunyan'?factory:fakeSubject});
-  assert.equal(run.status,'incomplete');assert.equal(run.score,null);assert.deepEqual(run.checks,{});assert.equal(calls,1);assert.equal(provider.spent,.00001);await assert.rejects(provider.request({model:'fake'},role),/停止/);assert.equal(calls,1);
+  assert.equal(run.status,'incomplete');assert.equal(run.score,null);assert.deepEqual(run.checks,{});assert.equal(calls,role==='student'?2:1);assert.equal(provider.spent,.00001*calls);const count=calls;await assert.rejects(provider.request({model:'fake'},role),/停止/);assert.equal(calls,count);
   assert.match(run.error,/出力が上限/);
   const text=report({runs:[run],models:{},budget:.8,spent:provider.spent});assert.match(text,/未完了/);assert.match(text,/未採点/);
  }
@@ -213,4 +213,98 @@ test('raw judge content is retained even when output hits the length limit',asyn
  let raw;
  await assert.rejects(provider.json('fake',[],undefined,'judge',value=>{raw=value;}),/出力が上限/);
  assert.equal(raw,'{"partial":');
+});
+
+ test('mode criteria, student obstacles and project context stay consistent',async()=>{
+  for(const mode of ['advisor','tutor']) {
+   const provider=fakeProvider(),json=provider.json.bind(provider),students=[];let judge;
+   provider.json=async(model,messages,...rest)=>{
+    if(model===catalog.config.student_model){students.push(messages[0].content);return {text:'困っています',edits:[],done:students.length===2};}
+    judge=messages;return json(model,messages,...rest);
+   };
+   const scenario={...catalog.scenarios.S01,mode,max_turns:2};
+   let subjectContext;
+   const run=await runScenario(scenario,catalog,{provider,subjectFactory:async context=>{subjectContext=context;return fakeSubject(context);}});
+   assert.equal(run.status,'complete');assert.equal(subjectContext.os,catalog.personas[scenario.persona].os);
+   const context=students.map(s=>JSON.parse(s.slice(s.indexOf('{"persona"'))));
+   assert.ok(!Object.hasOwn(context[0].task,'obstacles'));assert.deepEqual(context[1].task.obstacles,catalog.tasks[scenario.task].obstacles);
+   assert.equal(context[0].project_path,run.turns[0].cwd);assert.equal(context[0].home_path,subjectContext.home);assert.equal(context[1].home_path,subjectContext.home);assert.match(context[0].terminal_initial_location,/home_path/);assert.match(context[0].terminal_initial_location,/架空.*作らない/);
+   assert.match(judge[0].content,/減点の理由にしない/);
+   for(const id of ['C01','C02','C05']) {
+    assert.equal(Object.hasOwn(run.checks,id),mode==='tutor');
+    assert.equal(JSON.parse(judge[1].content).criteria.some(c=>c.id===id),mode==='tutor'&&id!=='C05');
+   }
+   const normalized=weights(catalog.criteria,scenario.criteria,mode);
+   assert.ok(Math.abs(Object.values(normalized).reduce((a,b)=>a+b,0)-100)<1e-8);
+   if(mode==='advisor')assert.match(report({runs:[run],models:{},budget:.8,spent:0}),/C01 \| 対象外/);
+  }
+ });
+
+test('all catalog personas reach the actual worker OS prompt with fake transport', {timeout:60000},async()=>{
+ for(const persona of Object.values(catalog.personas)) {
+  assert.ok(['macOS','Windows','Chromebook','Linux'].includes(persona.os),persona.id);
+  assert.ok(persona.place,persona.id);
+  const provider=fakeProvider(),request=provider.request.bind(provider);let seen=false;
+  provider.request=async body=>{
+   const system=body.messages.filter(m=>m.role==='system').map(m=>m.content).join('\n');
+   assert.ok(system.includes(`利用者の実行環境は${persona.os}です。`),persona.id);
+   seen=true;return request(body);
+  };
+  const run=await runScenario({...catalog.scenarios.S01,persona:persona.id},catalog,{provider});
+  assert.equal(run.status,'complete',`${persona.id}: ${run.error}`);assert.ok(seen,persona.id);
+ }
+});
+
+test('catalog validation rejects descriptive and unsupported OS values',async()=>temp(async dir=>{
+ await cp(ROOT,dir,{recursive:true,filter:p=>!p.includes('/runs')});
+ const path=resolve(dir,'personas/P1.yaml');
+ for(const os of ['学校の macOS','unknown','']) {
+  await writeFile(path,JSON.stringify({...catalog.personas.P1,os}));
+  await assert.rejects(loadCatalog(dir),/os/);
+ }
+}));
+
+test('fake CLI uses worker and completes S01 offline', {timeout:30000},async()=>temp(async dir=>{
+ const result=spawnSync(process.execPath,[new URL('../eval/cli.mjs',import.meta.url).pathname,'--fake','--scenario','S01','--output',dir],{encoding:'utf8',env:{PATH:process.env.PATH},timeout:25000});
+ assert.equal(result.status,0,result.stderr);
+ const data=JSON.parse(await readFile(resolve(dir,'runs/latest-fake.json'),'utf8'));
+ assert.equal(data.runs[0].status,'complete');
+ // fakeSubject supplies synthetic tool calls; the worker receives a text-only model response.
+ assert.deepEqual(data.runs[0].turns[0].calls,[]);
+}));
+
+ test('focus rejects mode-inapplicable criteria and permits tutor focus',async()=>{
+  for(const id of ['C01','C02','C05']) {
+   await assert.rejects(validateScenario({...catalog.scenarios.S01,focus:[id]},catalog),/focus.*対象外/);
+   await validateScenario({...catalog.scenarios.S01,mode:'tutor',focus:[id]},catalog);
+  }
+  for(const scenario of Object.values(catalog.scenarios))await validateScenario(scenario,catalog);
+ });
+
+test('student length retries once with identical input, reasoning and full budget reservation',async()=>{
+ for(const outcome of ['recover','length','budget','missing-cost','http']) {
+  const config=structuredClone(catalog.config),bodies=[];
+  const provider=new OpenRouter(config,'synthetic',async(_url,options)=>{
+   bodies.push(JSON.parse(options.body));
+   if(outcome==='http')return new Response('{}',{status:500});
+   if(outcome==='budget')config.budget_usd=.00001;
+   const length=bodies.length===1||outcome==='length';
+   return new Response(JSON.stringify({usage:outcome==='missing-cost'?{}:{cost:.00001,completion_tokens_details:{reasoning_tokens:length?8192:10}},choices:[{finish_reason:length?'length':'stop',message:{content:length?'':JSON.stringify({text:'困った',edits:[],done:true})}}]}));
+  });
+  const original=provider.json.bind(provider);let turns=0;
+  provider.json=(model,messages,reasoning,role,...rest)=>role==='student'?original(model,messages,reasoning,role,...rest):fakeProvider().json(model,messages);
+  const run=await runScenario(catalog.scenarios.S01,{...catalog,config},{provider,subjectFactory:async()=>({turn:async()=>{turns++;return {assistant:'助言',calls:[]};},close:async()=>{}})});
+  assert.equal(run.status,outcome==='recover'?'complete':'incomplete',outcome);
+  assert.equal(turns,outcome==='recover'?1:0);
+  assert.equal(bodies.length,['recover','length'].includes(outcome)?2:1);
+  assert.deepEqual(bodies[0].reasoning,{effort:'low'});assert.equal(bodies[0].max_tokens,8192);
+  if(bodies.length===2)assert.deepEqual(bodies[0],bodies[1]);
+  if(['recover','length'].includes(outcome))assert.equal(provider.spent,.00002);
+  if(outcome==='budget'){assert.equal(provider.spent,.00001);assert.match(run.error,/費用の上限/);}
+ }
+});
+test('student reasoning can disable reasoning with none',async()=>{
+ let body;
+ const provider=new OpenRouter(catalog.config,'synthetic',async(_url,options)=>{body=JSON.parse(options.body);return new Response(JSON.stringify({usage:{cost:0},choices:[{finish_reason:'stop',message:{content:'{}'}}]}));});
+ await provider.json('fake',[],'none','student');assert.deepEqual(body.reasoning,{effort:'none'});
 });
