@@ -4,7 +4,7 @@
   "task": "club-graph",
   "fixture": "club-graph",
   "mode": "tutor",
-  "situation": "2 つのフォルダを行き来(記憶)",
+  "situation": "2 つのフォルダを行き来(記憶)。A で作る→B に移る→A に戻る。戻ったら続きを言えるか",
   "opening": "A で作る→B に移る→A に戻る。戻ったら続きを言えるか",
   "criteria": {
     "C01": 15,
@@ -30,7 +30,7 @@
   "goals": [
     {
       "id": "understanding",
-      "text": "A で作る→B に移る→A に戻る。戻ったら続きを言えるか",
+      "text": "フォルダ A に戻ったとき、記憶に基づいて部活記録の作業状況と次の作業を正しく再開できた",
       "check": "judge"
     }
   ],

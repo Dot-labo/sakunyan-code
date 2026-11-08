@@ -23,7 +23,7 @@ export async function main(args=process.argv.slice(2)) {
   if(!options['--fake']&&!key)throw new Error('評価用のキー SAKUNYAN_EVAL_OPENROUTER_KEY がありません。評価は実行しません。担当者に開発用キーの設定を頼んでください。');
   const c=catalog.config;
   if(options['--budget'])c.budget_usd=Number(options['--budget']);
-  for(const field of ['budget_usd','max_output_tokens','max_price_prompt','max_price_completion'])if(!Number.isFinite(c[field])||c[field]<=0)throw new Error(`${field} は正の数にしてください`);
+  for(const field of ['budget_usd'])if(!Number.isFinite(c[field])||c[field]<=0)throw new Error(`${field} は正の数にしてください`);
   let scenarios=Object.values(catalog.scenarios);
   if(options['--scenario'])scenarios=options['--scenario'].split(',').map(id=>{if(!catalog.scenarios[id])throw new Error(`知らないシナリオ: ${id}`);return catalog.scenarios[id];});
   if(options['--matrix']) {
@@ -55,4 +55,4 @@ export async function main(args=process.argv.slice(2)) {
   console.log(`評価 ${result.runs.length}本を保存しました: ${resolve(output,'report.md')}${result.fake?'（偽物の動作確認）':''}`);
   if(result.runs.some(r=>r.status!=='complete'))process.exitCode=1;
 }
-if(process.argv[1]===new URL(import.meta.url).pathname)main().catch(()=>{console.error('評価を完了できませんでした。部品の定義と実行引数を確認してください。評価用キーが未設定の場合は SAKUNYAN_EVAL_OPENROUTER_KEY の設定を担当者に頼んでください。');process.exitCode=1;});
+if(process.argv[1]===new URL(import.meta.url).pathname)main().catch(e=>{const key=process.env.SAKUNYAN_EVAL_OPENROUTER_KEY;const message=String(e.message??e);console.error(key?message.split(key).join('[REDACTED]'):message);process.exitCode=1;});

@@ -4,7 +4,7 @@
   "task": "godot-node",
   "fixture": "godot-node",
   "mode": "tutor",
-  "situation": "話がそれる(Godot のノードの位置)",
+  "situation": "話がそれる(Godot のノードの位置)。同じ。キャラクターの絵が画面に出ない。親ノードと位置の理解で止まる",
   "opening": "同じ。キャラクターの絵が画面に出ない。親ノードと位置の理解で止まる",
   "criteria": {
     "C01": 15,
@@ -30,15 +30,16 @@
   "goals": [
     {
       "id": "understanding",
-      "text": "同じ。キャラクターの絵が画面に出ない。親ノードと位置の理解で止まる",
+      "text": "生徒が親ノードに対する位置を理解し、キャラクターを画面内に置く変更を説明できた",
       "check": "judge"
     },
     {
       "id": "completed-file",
-      "text": "生徒が課題を修正した",
+      "text": "キャラクターの初期化後の位置が画面内にある",
       "check": "fixture",
       "path": "main.gd",
-      "contains": "extends Node2D\nfunc _ready():\n    $Sprite2D.position = Vector2(100, 100)"
+      "scene": "main.tscn",
+      "evaluator": "godot-visible"
     }
   ]
 }

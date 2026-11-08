@@ -4,7 +4,7 @@
   "task": "csv-read",
   "fixture": "club-graph",
   "mode": "advisor",
-  "situation": "別のフォルダに移る",
+  "situation": "別のフォルダに移る。フォルダ B で別の課題。A の話は出さない",
   "opening": "フォルダ B で別の課題。A の話は出さない",
   "criteria": {
     "C01": 15,
@@ -29,7 +29,7 @@
   "goals": [
     {
       "id": "understanding",
-      "text": "フォルダ B で別の課題。A の話は出さない",
+      "text": "フォルダ B の CSV 読み込みの次の操作が具体的に示され、A の部活記録の話が混入しなかった",
       "check": "judge"
     }
   ],

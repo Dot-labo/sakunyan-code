@@ -4,7 +4,7 @@
   "task": "godot-node",
   "fixture": "godot-node",
   "mode": "advisor",
-  "situation": "話がそれる(Godot のエディタ操作)",
+  "situation": "話がそれる(Godot のエディタ操作)。マイクラの話から、作りたい物をはっきりさせる。ノードを足す場所が分からない",
   "opening": "マイクラの話から、作りたい物をはっきりさせる。ノードを足す場所が分からない",
   "criteria": {
     "C01": 15,
@@ -30,7 +30,7 @@
   "goals": [
     {
       "id": "understanding",
-      "text": "マイクラの話から、作りたい物をはっきりさせる。ノードを足す場所が分からない",
+      "text": "生徒が最初に作るゲームの具体的な動きと、Godot でノードを追加する場所を説明できた",
       "check": "judge"
     }
   ]

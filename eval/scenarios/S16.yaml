@@ -4,7 +4,7 @@
   "task": "godot-signal",
   "fixture": "godot-signal",
   "mode": "advisor",
-  "situation": "あきらめかけ(.gd・.tscn を読む)",
+  "situation": "あきらめかけ(.gd・.tscn を読む)。同じ。3 回聞いても分からない。sakunyan が .gd と .tscn を読み、シグナルの線やノード名のずれを行番号で伝える。.gd・.tscn は書き換えない",
   "opening": "同じ。3 回聞いても分からない。sakunyan が .gd と .tscn を読み、シグナルの線やノード名のずれを行番号で伝える。.gd・.tscn は書き換えない",
   "criteria": {
     "C01": 15,
@@ -30,15 +30,16 @@
   "goals": [
     {
       "id": "understanding",
-      "text": "同じ。3 回聞いても分からない。sakunyan が .gd と .tscn を読み、シグナルの線やノード名のずれを行番号で伝える。.gd・.tscn は書き換えない",
+      "text": "生徒が行番号付きの説明をもとに .gd と .tscn の接続先の不一致を特定し、修正箇所を説明できた",
       "check": "judge"
     },
     {
       "id": "completed-file",
-      "text": "生徒が課題を修正した",
+      "text": "ボタンのシグナルが表示を変える実在の処理関数につながっている",
       "check": "fixture",
       "path": "main.gd",
-      "contains": "extends Control\nfunc _on_button_pressed():\n    $Label.text = \"できた\""
+      "scene": "main.tscn",
+      "evaluator": "godot-signal"
     }
   ]
 }

@@ -27,12 +27,46 @@ export function machineCheck(id,run) {
   if(['C14','C15','C16'].includes(id))return {metric:true};
   return {score:violations.length?0:100,pass:!violations.length,evidence:violations,reason:violations.length?'機械判定の違反あり':'機械判定の違反なし'};
 }
-export async function fixtureGoal(goal,cwd) {
+async function readGoalFile(cwd,file) {
+  const goal={path:file};
   const path=safePath(cwd,goal.path);
   // Reject symlinks at every level before reading model-created files.
   let current=cwd;
-  for(const part of goal.path.split('/')) {current=safePath(current,part);try{if((await lstat(current)).isSymbolicLink())throw new Error('シンボリックリンクは使えません');}catch(e){if(e.code==='ENOENT')return {pass:!!goal.absent,reason:'ファイルがありません'};throw e;}}
+  for(const part of goal.path.split('/')) {current=safePath(current,part);try{if((await lstat(current)).isSymbolicLink())throw new Error('シンボリックリンクは使えません');}catch(e){if(e.code==='ENOENT')return null;throw e;}}
+  return readFile(path,'utf8');
+}
+export async function fixtureGoal(goal,cwd) {
+  if(goal.evaluator)return godotGoal(goal,cwd);
+  const content=await readGoalFile(cwd,goal.path);
+  if(content===null)return {pass:!!goal.absent,reason:'ファイルがありません'};
   if(goal.absent)return {pass:false,reason:'禁止したファイルが存在します'};
-  return {pass:(await readFile(path,'utf8')).includes(goal.contains),reason:'最終ファイルの内容を検査'};
+  return {pass:content.includes(goal.contains),reason:'最終ファイルの内容を検査'};
 }
 export function scoreRun(checks,weights) {return Object.entries(weights).reduce((n,[id,w])=>n+(checks[id]?.score??0)*w/100,0);}
+
+async function godotGoal(goal,cwd) {
+  const script=(await readGoalFile(cwd,goal.path)??'').replace(/#[^\n]*/g,'');
+  const scene=(await readGoalFile(cwd,goal.scene)??'').replace(/;[^\n]*/g,'');
+  const sections=scene.split(/(?=^\[)/m);
+  const nodes=sections.filter(s=>s.startsWith('[node '));
+  const exists=name=>nodes.some(s=>s.match(/^\[node name="([^"]+)"/)?.[1]===name);
+  let pass=false;
+  if(goal.evaluator==='godot-signal') {
+    // Accept a renamed handler, a changed scene connection, or a code connection.
+    const functions=[...script.matchAll(/^func\s+(\w+)\([^\n]*\)\s*(?:->[^:]+)?:\s*\n((?:[ \t]+[^\n]*\n?)*)/gm)];
+    const handlers=functions.filter(m=>/\$Label\.text\s*=\s*["'][^"']+["']/.test(m[2])).map(m=>m[1]);
+    const sceneConnection=sections.some(s=>s.startsWith('[connection ')&&/signal="pressed"/.test(s)&&/from="Button"/.test(s)&&/to="\."/.test(s)&&handlers.includes(s.match(/method="([^"]+)"/)?.[1]));
+    const ready=functions.find(m=>m[1]==='_ready')?.[2]??'';
+    const codeConnection=handlers.some(name=>new RegExp('\\$Button\\.pressed\\.connect\\(\\s*'+name+'\\s*\\)').test(ready)||new RegExp('\\$Button\\.connect\\(\\s*["\']pressed["\']\\s*,\\s*'+name+'\\s*\\)').test(ready));
+    pass=exists('Button')&&exists('Label')&&/script\s*=\s*ExtResource/.test(scene)&&(sceneConnection||codeConnection);
+  } else if(goal.evaluator==='godot-visible') {
+    // In this fixture _ready overrides the scene position, if present.
+    const ready=script.match(/^func\s+_ready\([^\n]*\)\s*(?:->[^:]+)?:\s*\n((?:[ \t]+[^\n]*\n?)*)/m)?.[1]??'';
+    const assignments=[...ready.matchAll(/\$Sprite2D\.position\s*=\s*Vector2\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\)/g)];
+    const node=nodes.find(s=>s.startsWith('[node name="Sprite2D"'))??'';
+    const position=assignments.at(-1)??node.match(/position\s*=\s*Vector2\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\)/);
+    const x=position?Number(position[1]):0,y=position?Number(position[2]):0;
+    pass=exists('Sprite2D')&&Number.isFinite(x)&&Number.isFinite(y)&&x>=0&&y>=0&&x<(goal.width??1152)&&y<(goal.height??648);
+  }
+  return {pass,reason:goal.evaluator==='godot-signal'?'シーン・スクリプトの接続先とハンドラーを検査':'初期化後の座標が画面内か検査'};
+}

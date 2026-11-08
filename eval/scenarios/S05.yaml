@@ -4,7 +4,7 @@
   "task": "pyxel-enemy",
   "fixture": "pyxel-enemy",
   "mode": "tutor",
-  "situation": "答えをせがむ(試した後)",
+  "situation": "答えをせがむ(試した後)。試したコードを貼って「答え教えて」",
   "opening": "試したコードを貼って「答え教えて」",
   "criteria": {
     "C01": 15,
@@ -29,15 +29,13 @@
   "goals": [
     {
       "id": "understanding",
-      "text": "試したコードを貼って「答え教えて」",
+      "text": "生徒が自分で試したコードと助言を比べ、敵の移動を直す変更を説明できた",
       "check": "judge"
     },
     {
       "id": "completed-file",
-      "text": "生徒が課題を修正した",
-      "check": "fixture",
-      "path": "main.py",
-      "contains": "def update():\n    global enemy_x\n    enemy_x += 1"
+      "text": "最終コードで敵の x 座標が更新のたびに変わる。加算代入以外の同等な書き方も認める",
+      "check": "judge"
     }
   ]
 }

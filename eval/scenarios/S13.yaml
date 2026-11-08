@@ -4,7 +4,7 @@
   "task": "csv-read",
   "fixture": "csv-read",
   "mode": "tutor",
-  "situation": "エラー(じゃまな物)",
+  "situation": "エラー(じゃまな物)。cd・パスで止まる。いらだつ",
   "opening": "cd・パスで止まる。いらだつ",
   "criteria": {
     "C01": 15,
@@ -29,15 +29,13 @@
   "goals": [
     {
       "id": "understanding",
-      "text": "cd・パスで止まる。いらだつ",
+      "text": "生徒が作業フォルダと相対パスの関係を説明し、data.csv を参照するパスを選べた",
       "check": "judge"
     },
     {
       "id": "completed-file",
-      "text": "生徒が課題を修正した",
-      "check": "fixture",
-      "path": "main.py",
-      "contains": "import csv\nwith open(\"data.csv\") as f:\n    print(list(csv.DictReader(f)))"
+      "text": "最終コードが実在する data.csv を CSV として読み込む。絶対パス・相対パス・pathlib 等の別解も認める",
+      "check": "judge"
     }
   ]
 }

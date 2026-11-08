@@ -4,7 +4,7 @@
   "task": "club-graph",
   "fixture": "club-graph",
   "mode": "advisor",
-  "situation": "続きから",
+  "situation": "続きから。前回の部活記録のグラフの続き。理由を聞く",
   "opening": "前回の部活記録のグラフの続き。理由を聞く",
   "criteria": {
     "C01": 15,
@@ -30,15 +30,13 @@
   "goals": [
     {
       "id": "understanding",
-      "text": "前回の部活記録のグラフの続き。理由を聞く",
+      "text": "生徒が部活記録の集計を関数に分ける次の作業と、その理由を説明できた",
       "check": "judge"
     },
     {
       "id": "completed-file",
-      "text": "生徒が課題を修正した",
-      "check": "fixture",
-      "path": "main.py",
-      "contains": "def totals(rows):\n    return sum(int(row[\"score\"]) for row in rows)"
+      "text": "最終コードに CSV の score を数値に変換して合計する関数がある。sum 以外のループなども認める",
+      "check": "judge"
     }
   ]
 }

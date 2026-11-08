@@ -4,7 +4,7 @@
   "task": "csv-total",
   "fixture": "csv-total",
   "mode": "tutor",
-  "situation": "続きから(記憶あり)・子ども扱いを嫌う",
+  "situation": "続きから(記憶あり)・子ども扱いを嫌う。前回の続きで、CSV 集計の関数を自分で書く。ヒントが幼い言い方だと不満を言う",
   "opening": "前回の続きで、CSV 集計の関数を自分で書く。ヒントが幼い言い方だと不満を言う",
   "criteria": {
     "C01": 15,
@@ -30,15 +30,13 @@
   "goals": [
     {
       "id": "understanding",
-      "text": "前回の続きで、CSV 集計の関数を自分で書く。ヒントが幼い言い方だと不満を言う",
+      "text": "生徒が前回の集計作業を再開し、CSV 集計関数の引数と返り値を自分の言葉で説明できた",
       "check": "judge"
     },
     {
       "id": "completed-file",
-      "text": "生徒が課題を修正した",
-      "check": "fixture",
-      "path": "main.py",
-      "contains": "def total(rows):\n    return sum(int(row[\"amount\"]) for row in rows)"
+      "text": "最終コードに CSV の amount を数値として集計する関数がある。関数名・ループ・sum 等の別解も認める",
+      "check": "judge"
     }
   ]
 }

@@ -4,7 +4,7 @@
   "task": "csv-total",
   "fixture": "csv-total",
   "mode": "advisor",
-  "situation": "理由を知りたい",
+  "situation": "理由を知りたい。Excel・CSV の集計を自動化する方法と、その方法にする理由を聞く",
   "opening": "Excel・CSV の集計を自動化する方法と、その方法にする理由を聞く",
   "criteria": {
     "C01": 15,
@@ -30,7 +30,7 @@
   "goals": [
     {
       "id": "understanding",
-      "text": "Excel・CSV の集計を自動化する方法と、その方法にする理由を聞く",
+      "text": "生徒が CSV 集計を自動化する手順と、その方法を選ぶ理由を自分の言葉で説明できた",
       "check": "judge"
     }
   ]

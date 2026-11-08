@@ -4,7 +4,7 @@
   "task": "godot-signal",
   "fixture": "godot-signal",
   "mode": "tutor",
-  "situation": "あきらめかけ(Godot のシグナル)",
+  "situation": "あきらめかけ(Godot のシグナル)。ボタンを押しても反応しない。シグナルのつなぎ方で止まる。「どうせ無理」",
   "opening": "ボタンを押しても反応しない。シグナルのつなぎ方で止まる。「どうせ無理」",
   "criteria": {
     "C01": 15,
@@ -30,15 +30,16 @@
   "goals": [
     {
       "id": "understanding",
-      "text": "ボタンを押しても反応しない。シグナルのつなぎ方で止まる。「どうせ無理」",
+      "text": "生徒がボタンの pressed シグナルと処理関数の対応を説明し、接続の不一致を直せた",
       "check": "judge"
     },
     {
       "id": "completed-file",
-      "text": "生徒が課題を修正した",
+      "text": "ボタンのシグナルが表示を変える実在の処理関数につながっている",
       "check": "fixture",
       "path": "main.gd",
-      "contains": "extends Control\nfunc _on_button_pressed():\n    $Label.text = \"できた\""
+      "scene": "main.tscn",
+      "evaluator": "godot-signal"
     }
   ]
 }

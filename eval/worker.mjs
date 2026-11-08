@@ -21,7 +21,7 @@ process.on('message',async msg=>{
       process.chdir(msg.cwd);
       const {createSakunyanRuntime}=await import('../dist/runtime.js');
       const {SessionManager,initTheme}=await import('@earendil-works/pi-coding-agent');
-      runtime=await createSakunyanRuntime({apiKey:'evaluation-transport-only',thinking:'off'},SessionManager.inMemory(msg.cwd));
+      runtime=await createSakunyanRuntime({apiKey:'evaluation-transport-only'},SessionManager.inMemory(msg.cwd));
       initTheme('dark',false);
       await runtime.session.bindExtensions({mode:'print'});
       if(msg.mode==='tutor') {
@@ -39,7 +39,7 @@ process.on('message',async msg=>{
       try {await runtime.session.prompt(msg.text);}finally{unsubscribe();}
       const messages=runtime.session.messages.slice(before);
       const assistant=messages.filter(m=>m.role==='assistant').map(m=>(m.content??[]).filter(c=>c.type==='text').map(c=>c.text).join('')).join('\n');
-      if(messages.some(m=>m.role==='assistant'&&['error','aborted'].includes(m.stopReason)))throw new Error('sakunyan の返事が完了しませんでした');
+      if(messages.some(m=>m.role==='assistant'&&['error','aborted','length'].includes(m.stopReason)))throw new Error('sakunyan の返事が完了しませんでした');
       process.send({type:'turn',assistant,calls,messages});
     }
     if(msg.type==='close'){await runtime?.dispose();process.exit(0);}

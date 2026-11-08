@@ -4,7 +4,7 @@
   "task": "python-name",
   "fixture": "python-name",
   "mode": "tutor",
-  "situation": "初めて",
+  "situation": "初めて。同じ課題。2 語で返し、打ち間違える",
   "opening": "同じ課題。2 語で返し、打ち間違える",
   "criteria": {
     "C01": 15,
@@ -31,15 +31,13 @@
   "goals": [
     {
       "id": "understanding",
-      "text": "同じ課題。2 語で返し、打ち間違える",
+      "text": "生徒が pritn の打ち間違いに気づいて print に直し、名前の表示方法を説明できた",
       "check": "judge"
     },
     {
       "id": "completed-file",
-      "text": "生徒が課題を修正した",
-      "check": "fixture",
-      "path": "main.py",
-      "contains": "print(\"さくら\")"
+      "text": "最終コードが名前を表示する有効な Python になっている。引用符・表示する名前・変数経由などの別解も認める",
+      "check": "judge"
     }
   ]
 }

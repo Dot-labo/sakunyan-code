@@ -4,7 +4,7 @@
   "task": "csv-read",
   "fixture": "csv-read",
   "mode": "tutor",
-  "situation": "エラー(学びの課題)",
+  "situation": "エラー(学びの課題)。uv と pip の違い。いらだつ",
   "opening": "uv と pip の違い。いらだつ",
   "criteria": {
     "C01": 15,
@@ -29,7 +29,7 @@
   "goals": [
     {
       "id": "understanding",
-      "text": "uv と pip の違い。いらだつ",
+      "text": "生徒が uv と pip の役割の違いを説明し、課題に必要なパッケージの導入方法を選べた",
       "check": "judge"
     }
   ]

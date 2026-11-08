@@ -4,7 +4,7 @@
   "task": "html-page",
   "fixture": "html-page",
   "mode": "tutor",
-  "situation": "時間が無い(Web ページ)",
+  "situation": "時間が無い(Web ページ)。発表が近い。HTML のタグが閉じていない。「もうおわる」と言う",
   "opening": "発表が近い。HTML のタグが閉じていない。「もうおわる」と言う",
   "criteria": {
     "C01": 15,
@@ -30,15 +30,13 @@
   "goals": [
     {
       "id": "understanding",
-      "text": "発表が近い。HTML のタグが閉じていない。「もうおわる」と言う",
+      "text": "生徒が閉じ忘れた HTML タグを特定し、見出しが本文と分かれるように直せた",
       "check": "judge"
     },
     {
       "id": "completed-file",
-      "text": "生徒が課題を修正した",
-      "check": "fixture",
-      "path": "index.html",
-      "contains": "<html><body><h1>こんにちは</h1></body></html>"
+      "text": "最終 HTML で見出しタグが対応して閉じ、本文と見出しの構造が成立している。空白・属性・他の妥当な HTML も認める",
+      "check": "judge"
     }
   ]
 }

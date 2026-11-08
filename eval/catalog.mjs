@@ -23,8 +23,9 @@ export async function loadCatalog(root = ROOT) {
     }
   }
   catalog.config = parse(await readFile(resolve(root,'config.yaml'),'utf8'));
-  requireFields(catalog.config,['student_model','judge_model','judge_reasoning','budget_usd','max_output_tokens','max_price_prompt','max_price_completion','pass_score'],'config.yaml');
-  for(const key of ['budget_usd','max_output_tokens','max_price_prompt','max_price_completion'])if(!Number.isFinite(catalog.config[key])||catalog.config[key]<=0)throw new Error(`config.yaml: ${key} が不正です`);
+  requireFields(catalog.config,['student_model','judge_model','judge_reasoning','budget_usd','roles','pass_score'],'config.yaml');
+  if(!Number.isFinite(catalog.config.budget_usd)||catalog.config.budget_usd<=0)throw new Error('config.yaml: budget_usd が不正です');
+  for(const role of ['sakunyan','student','judge'])for(const key of ['max_output_tokens','max_price_prompt','max_price_completion']){const value=catalog.config.roles?.[role]?.[key];if(!Number.isFinite(value)||value<=0||(key==='max_output_tokens'&&!Number.isInteger(value)))throw new Error(`config.yaml: roles.${role}.${key} が不正です`);}
   if(!Number.isFinite(catalog.config.pass_score)||catalog.config.pass_score<0||catalog.config.pass_score>100)throw new Error('config.yaml: pass_score が不正です');
   for (const p of Object.values(catalog.personas)) if (!Array.isArray(p.examples) || p.examples.length<3 || p.examples.length>5) throw new Error(`${p.id}: 入力例は3〜5文です`);
   for (const c of Object.values(catalog.criteria)) {
@@ -52,7 +53,7 @@ export async function validateScenario(s,catalog,root=ROOT) {
     requireFields(g,['id','text','check'],s.id);
     if(ids.has(g.id)) throw new Error('ゴールの番号が重複しています'); ids.add(g.id);
     if (!['fixture','judge'].includes(g.check)) throw new Error('ゴールの判定方法が不正です');
-    if (g.check==='fixture') {safePath(resolve(root,'fixtures',s.fixture),g.path); if(!g.absent&&typeof g.contains!=='string') throw new Error('fixture ゴールに contains がありません');}
+    if (g.check==='fixture') {safePath(resolve(root,'fixtures',s.fixture),g.path); if(g.evaluator)safePath(resolve(root,'fixtures',s.fixture),g.scene); if(g.evaluator&&!['godot-visible','godot-signal'].includes(g.evaluator))throw new Error('知らない fixture 判定方法です'); if(!g.evaluator&&!g.absent&&typeof g.contains!=='string') throw new Error('fixture ゴールに contains がありません');}
   }
 }
 export function weights(criteria, overrides={}) {
@@ -62,19 +63,25 @@ export function weights(criteria, overrides={}) {
   return Object.fromEntries(active.map(c=>[c.id,100*(overrides[c.id]??c.weight)/total]));
 }
 export function matrix(catalog,{personas=Object.keys(catalog.personas),tasks,fixtures,modes=['advisor','tutor']}) {
-  return personas.flatMap(p=>tasks.flatMap(t=>modes.map(m=>({id:`${p}-${t}-${m}`,persona:p,task:t,fixture:fixtures?.[t]??t,mode:m,criteria:{},max_turns:8,goals:[{id:'understanding',text:catalog.tasks[t]?.objective,check:'judge'}]}))));
+  return personas.flatMap(p=>tasks.flatMap(t=>modes.map(m=>({id:`${p}-${t}-${m}`,persona:p,task:t,fixture:fixtures?.[t]??t,mode:m,criteria:{},max_turns:8,goals:[{id:'understanding',text:`生徒が「${catalog.tasks[t]?.objective}」に必要な変更と次の操作を自分の言葉で説明できた`,check:'judge'}]}))));
 }
 export function dailySample(scenarios,personas,date=new Date().toISOString().slice(0,10)) {
-  // Rotate within each grade/mode stratum, then fill to six without duplicates.
-  let seed=[...date].reduce((n,c)=>(n*31+c.charCodeAt(0))>>>0,0);
-  const shuffled=[...scenarios].sort((a,b)=>a.id.localeCompare(b.id));
-  for(let i=shuffled.length-1;i>0;i--){seed=(seed*1664525+1013904223)>>>0;const j=seed%(i+1);[shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]];}
-  const selected=[]; const seen=new Set();
-  for(const s of shuffled) {const key=`${personas[s.persona].grade_band}/${s.mode}`;if(!seen.has(key)){selected.push(s);seen.add(key);}}
-  // Eight strata cannot fit in six. Alternate the majority strata daily; keep all grades and both modes.
-  const chosen=[];
-  for(const grade of ['primary','adult','high','middle']) {const candidates=shuffled.filter(s=>personas[s.persona].grade_band===grade);candidates.sort((a,b)=>chosen.filter(s=>s.mode===a.mode).length-chosen.filter(s=>s.mode===b.mode).length);const s=candidates[0];if(s) chosen.push(s);}
-  for(const mode of ['advisor','tutor']) if(!chosen.some(s=>s.mode===mode)){const s=selected.find(s=>s.mode===mode&&!chosen.includes(s));if(s)chosen.push(s);}
-  while(chosen.length<Math.min(6,shuffled.length)){const candidates=shuffled.filter(s=>!chosen.includes(s));candidates.sort((a,b)=>chosen.filter(s=>s.mode===a.mode).length-chosen.filter(s=>s.mode===b.mode).length);chosen.push(candidates[0]);}
-  return chosen;
+  // One cyclic schedule gives each scenario the same exposure. Requiring every
+  // grade every day would force the sole primary-school scenario to run daily.
+  const byMode={advisor:[],tutor:[]};
+  for(const mode of Object.keys(byMode)) {
+    const grades=new Map();
+    for(const s of [...scenarios].sort((a,b)=>a.id.localeCompare(b.id)).filter(s=>s.mode===mode)) {
+      const grade=personas[s.persona].grade_band;
+      if(!grades.has(grade))grades.set(grade,[]);grades.get(grade).push(s);
+    }
+    while([...grades.values()].some(xs=>xs.length))for(const xs of grades.values())if(xs.length)byMode[mode].push(xs.shift());
+  }
+  const ordered=[];
+  while(byMode.advisor.length||byMode.tutor.length)for(const xs of Object.values(byMode))if(xs.length)ordered.push(xs.shift());
+  if(!ordered.length)return [];
+  const day=Math.floor(Date.parse(`${date}T00:00:00Z`)/86400000);
+  if(!Number.isFinite(day))throw new Error('抜き取りの日付が不正です');
+  const size=Math.min(6,ordered.length),start=((day*size)%ordered.length+ordered.length)%ordered.length;
+  return Array.from({length:size},(_,i)=>ordered[(start+i)%ordered.length]);
 }
