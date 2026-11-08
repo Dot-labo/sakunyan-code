@@ -1,0 +1,44 @@
+{
+  "id": "S20",
+  "persona": "P8",
+  "task": "csv-total",
+  "fixture": "csv-total",
+  "mode": "tutor",
+  "situation": "続きから(記憶あり)・子ども扱いを嫌う",
+  "opening": "前回の続きで、CSV 集計の関数を自分で書く。ヒントが幼い言い方だと不満を言う",
+  "criteria": {
+    "C01": 15,
+    "C02": 15,
+    "C03": 10,
+    "C04": 5,
+    "C05": 5,
+    "C06": 5,
+    "C07": 10,
+    "C08": 10,
+    "C09": 3,
+    "C10": 7,
+    "C11": 7,
+    "C12": 3,
+    "C13": 5
+  },
+  "focus": [
+    "C10",
+    "C03",
+    "C06"
+  ],
+  "max_turns": 10,
+  "goals": [
+    {
+      "id": "understanding",
+      "text": "前回の続きで、CSV 集計の関数を自分で書く。ヒントが幼い言い方だと不満を言う",
+      "check": "judge"
+    },
+    {
+      "id": "completed-file",
+      "text": "生徒が課題を修正した",
+      "check": "fixture",
+      "path": "main.py",
+      "contains": "def total(rows):\n    return sum(int(row[\"amount\"]) for row in rows)"
+    }
+  ]
+}

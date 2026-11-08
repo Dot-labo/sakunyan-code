@@ -1,0 +1,8 @@
+{
+  "id": "godot-signal",
+  "objective": "ボタンを押すと表示が変わる",
+  "project_type": "Godot / GDScript / .tscn",
+  "obstacles": "シグナルとノード名のずれ",
+  "completion": "extends Control\nfunc _on_button_pressed():\n    $Label.text = \"できた\"\n",
+  "file": "main.gd"
+}

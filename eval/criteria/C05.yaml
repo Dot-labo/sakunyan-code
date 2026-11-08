@@ -1,0 +1,10 @@
+{
+  "id": "C05",
+  "name": "質問は 1 回 1 つ",
+  "observes": "1 回の返事の質問が 1 つか(チューター)",
+  "threshold": "質問の数が 2 以上の返事 0",
+  "method": "machine",
+  "weight": 5,
+  "kind": "score",
+  "evaluator": "C05"
+}

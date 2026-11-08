@@ -1,0 +1,10 @@
+{
+  "id": "C04",
+  "name": "返事の長さ",
+  "observes": "1 回の返事が短いか",
+  "threshold": "1 回 300 字以内(チューターは 200 字以内)。超えは全体の 10% まで",
+  "method": "machine",
+  "weight": 5,
+  "kind": "score",
+  "evaluator": "C04"
+}

@@ -1,0 +1,10 @@
+{
+  "id": "C16",
+  "name": "全体の点",
+  "observes": "基準 C01〜C13 の点(0〜100)の重み付けの合計。シナリオごとの点の平均",
+  "threshold": "85 点以上で合格。前の版より 5 点以上下がったら不合格",
+  "method": "machine",
+  "weight": 0,
+  "kind": "overall",
+  "evaluator": "C16"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "godot-node",
+  "objective": "キャラクターを画面に表示する",
+  "project_type": "Godot / GDScript / 2D",
+  "obstacles": "シーン・親ノード・位置",
+  "completion": "extends Node2D\nfunc _ready():\n    $Sprite2D.position = Vector2(100, 100)\n",
+  "file": "main.gd"
+}

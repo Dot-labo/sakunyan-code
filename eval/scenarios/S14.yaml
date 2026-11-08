@@ -1,0 +1,36 @@
+{
+  "id": "S14",
+  "persona": "P5",
+  "task": "csv-read",
+  "fixture": "csv-read",
+  "mode": "tutor",
+  "situation": "エラー(学びの課題)",
+  "opening": "uv と pip の違い。いらだつ",
+  "criteria": {
+    "C01": 15,
+    "C02": 15,
+    "C03": 10,
+    "C04": 5,
+    "C05": 5,
+    "C06": 5,
+    "C07": 10,
+    "C08": 10,
+    "C09": 3,
+    "C10": 7,
+    "C11": 7,
+    "C12": 3,
+    "C13": 5
+  },
+  "focus": [
+    "C01",
+    "C07"
+  ],
+  "max_turns": 8,
+  "goals": [
+    {
+      "id": "understanding",
+      "text": "uv と pip の違い。いらだつ",
+      "check": "judge"
+    }
+  ]
+}

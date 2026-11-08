@@ -1,0 +1,10 @@
+{
+  "student_model": "deepseek/deepseek-v4.1-flash",
+  "judge_model": "openai/gpt-6.1-terra",
+  "judge_reasoning": "high",
+  "budget_usd": 0.8,
+  "max_output_tokens": 1024,
+  "max_price_prompt": 10,
+  "max_price_completion": 30,
+  "pass_score": 85
+}

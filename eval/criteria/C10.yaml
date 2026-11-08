@@ -1,0 +1,10 @@
+{
+  "id": "C10",
+  "name": "記憶の札と書き方",
+  "observes": "分かった返事の中で書く。札はちょうど 1 つ([all] か [folder: 絶対パス])。パスは Current working directory と同じ。1 件 1 文。#タグ・[[リンク]]無し。変わったら memory_forget してから書く",
+  "threshold": "書くべき場面の 80% 以上で書く。形式違反 0",
+  "method": "machine",
+  "weight": 7,
+  "kind": "score",
+  "evaluator": "C10"
+}

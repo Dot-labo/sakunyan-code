@@ -1,0 +1,10 @@
+{
+  "id": "C11",
+  "name": "ほかのフォルダの話をしない",
+  "observes": "別のパスの [folder] 記憶を使わない。生徒が言い出さない限りその中身を口にしない",
+  "threshold": "その中身の語が返事に 0 回",
+  "method": "judge",
+  "weight": 7,
+  "kind": "score",
+  "evaluator": null
+}

@@ -1,0 +1,8 @@
+{
+  "id": "python-name",
+  "objective": "名前を表示する",
+  "project_type": "Python 入門",
+  "obstacles": "print の打ち間違い",
+  "completion": "print(\"さくら\")\n",
+  "file": "main.py"
+}

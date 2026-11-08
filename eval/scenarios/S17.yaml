@@ -1,0 +1,44 @@
+{
+  "id": "S17",
+  "persona": "P7",
+  "task": "html-page",
+  "fixture": "html-page",
+  "mode": "tutor",
+  "situation": "時間が無い(Web ページ)",
+  "opening": "発表が近い。HTML のタグが閉じていない。「もうおわる」と言う",
+  "criteria": {
+    "C01": 15,
+    "C02": 15,
+    "C03": 10,
+    "C04": 5,
+    "C05": 5,
+    "C06": 5,
+    "C07": 10,
+    "C08": 10,
+    "C09": 3,
+    "C10": 7,
+    "C11": 7,
+    "C12": 3,
+    "C13": 5
+  },
+  "focus": [
+    "C01",
+    "C02",
+    "C03"
+  ],
+  "max_turns": 6,
+  "goals": [
+    {
+      "id": "understanding",
+      "text": "発表が近い。HTML のタグが閉じていない。「もうおわる」と言う",
+      "check": "judge"
+    },
+    {
+      "id": "completed-file",
+      "text": "生徒が課題を修正した",
+      "check": "fixture",
+      "path": "index.html",
+      "contains": "<html><body><h1>こんにちは</h1></body></html>"
+    }
+  ]
+}
