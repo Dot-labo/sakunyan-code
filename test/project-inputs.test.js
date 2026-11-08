@@ -93,6 +93,7 @@ test(".pi resources do not display pi's project-trust notice in the real TUI", t
   const { project, run } = fixture(t);
   const { before } = run();
   assert.equal(before.cwd, project);
+  assert.doesNotMatch(before.chat, /Install qmd|memory_search requires qmd/);
   assert.doesNotMatch(before.chat, /This project is not trusted|restart pi|\/trust/);
 });
 
@@ -212,4 +213,14 @@ test("global settings remain readable and writable without changing project sett
   assert.equal(result.final.editorPaddingX, 3);
   assert.equal(JSON.parse(readFileSync(join(f.home, ".sakunyan", "settings.json"), "utf8")).editorPaddingX, 3);
   assert.equal(readFileSync(join(f.project, ".pi", "settings.json"), "utf8"), projectBefore);
+});
+
+test("qmd installation notice stays hidden across new and resumed sessions", t => {
+  const f = fixture(t);
+  const session = join(f.root, "resume-session.jsonl");
+  f.put(session, JSON.stringify({ type: "session", version: 3, id: "memory-notice-fixture", cwd: f.project, timestamp: "2026-01-01T00:00:00.000Z" }) + "\n");
+  const result = f.run([], ["/new", { switchSession: session }, "/reload"]);
+  for (const state of [result.before, ...result.transitions]) {
+    assert.doesNotMatch(state.chat, /Install qmd|memory_search requires qmd/);
+  }
 });

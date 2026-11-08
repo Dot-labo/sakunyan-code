@@ -9,7 +9,7 @@ import { sakunyanExtension, saveApiKey } from "../dist/extension.js";
 import { installCommand, messages } from "../dist/messages.js";
 import { MODEL_ARGS, MODEL_ID, MODEL_PROVIDER, MODEL_REFERENCE } from "../dist/model-config.js";
 import { canReachServer } from "../dist/network-check.js";
-import { DEFAULT_MODE_ID, getDefaultMode, SAKUNYAN_MODES } from "../dist/modes.js";
+import { DEFAULT_MODE_ID, getDefaultMode, SAKUNYAN_MODES, MEMORY_POLICY_PROMPT } from "../dist/modes.js";
 import { supportsNodeVersion } from "../dist/node-version.js";
 import { detectRuntimeOS, formatRuntimeOS, getRuntimeOS } from "../dist/runtime-os.js";
 import { fetchLatestSakunyanVersion, isUpdateAvailable } from "../dist/update-check.js";
@@ -18,7 +18,6 @@ import { SAKUNYAN_VERSION } from "../dist/version.js";
 const readOnlyAndMemoryTools = [
   "read", "grep", "find", "ls",
   "memory_write", "memory_read", "memory_forget", "memory_restore",
-  "scratchpad", "memory_search", "memory_status",
 ];
 
 const welcomePattern = new RegExp(
@@ -712,4 +711,17 @@ test("起動に失敗したときと、Node.jsが古いときは、次にやる�
   assert.match(oldNode, /ターミナル（PowerShellなど）をいちど閉じて、開き直してください/);
   assert.equal(supportsNodeVersion("20.11.0"), false);
   assert.equal(supportsNodeVersion("18.20.8"), false);
+});
+
+test("記憶の方針は全体とフォルダの札を使い、使えない道具との矛盾を解消する", () => {
+  for (const text of ["[all]", "[folder:", "Current working directory",
+    "scratchpad and memory_search are not available in this environment. Do not use them.",
+    "This policy takes priority over the #tags / [[links]] guidance shown in the memory section."]) {
+    assert.ok(MEMORY_POLICY_PROMPT.includes(text), text);
+  }
+  for (const mode of SAKUNYAN_MODES) {
+    for (const tool of ["scratchpad", "memory_search", "memory_status"]) {
+      assert.ok(!mode.tools.includes(tool), `${mode.id}: ${tool}`);
+    }
+  }
 });
