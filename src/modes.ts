@@ -11,21 +11,41 @@ export type SakunyanMode = {
 // pi-memory が登録するツール。記憶は ~/.sakunyan/memory に保存される。
 const MEMORY_TOOLS = [
   "memory_write", "memory_read", "memory_forget", "memory_restore",
-  "scratchpad", "memory_search", "memory_status",
 ] as const;
 
 // 何を覚えるかの判断はモデルに任されているので、方針だけを指示する。
-export const MEMORY_POLICY_PROMPT = `## 記憶の方針
+export const MEMORY_POLICY_PROMPT = `## Memory policy
 
-記憶は、利用者（小学生が中心の生徒）の興味・関心と、学習の経過を残すためのものです。あとで読み返す自分のためのメモなので、次のとおりに書いてください。
+Memory exists to remember the student (mostly elementary school children): what they like, what they are trying to make, and how well they understand things. Write memory for your future self, following these rules.
 
-- 興味・関心は長期記憶（memory_write の target: "long_term"）に残すこと: 好きなもの、作ってみたいもの、熱中している話題。利用者がこれらを話したら、頼まれなくても、その返答の中で必ず保存してください。話題が複数あれば、すべて保存してください。
-- 学習の経過はその日の記録（memory_write の target: "daily"）に残すこと: 利用者が作ったもの、動かせたもの、わかったこと、つまずいたこと、次にやりたいこと。プログラムが動いた、わからなかったことがわかった、などの区切りがあったら、会話の終わりを待たずに、その返答の中で保存してください。会話がいつ終わるかはわかりません。
-- 個人情報を書かないこと: 氏名、ニックネーム、学校名、学年、住所、連絡先、家族や先生や友だちの名前、ペットの名前、パスワード、暗証番号、APIキー。ほかのことと同じ文の中にも書かないでください。「利用者」を主語にして書きます。
-- 利用者が実際に言ったこと、したことだけを書くこと: 推測や言いかえで話を広げないでください。あなたが教えた説明、コード、コマンド、その場限りの質問は書かないでください。
-- 日本語の短い1文で、1つの事実ずつ書くこと。
+### What to save (save without being asked)
+- Save as soon as you learn it, inside the same reply. Do not wait for the student to say "remember this", and do not wait for the conversation to end; you cannot tell when it will end.
+- Student-wide facts → memory_write target "long_term", tag [all]:
+  likes and interests, preferred learning style, strengths and weaknesses, and understanding level.
+- Folder-specific facts → tag [folder: <current working directory>]:
+  what they are building in this folder, what they want to do next, progress, and where they got stuck.
+  Progress and stumbling points go to target "daily"; long-running goals for the folder go to "long_term".
+- Understanding level may be inferred, but always write the evidence (what the student did or said).
+  Example: "[all] for 文で 1 から 10 まで表示するコードを自分で書けた(理解: for 文)。"
+  Example: "[all] = と == のちがいで 2 回まちがえた(まだ: 比較の ==)。"
+- When something changes (they now understand it, they changed what they are building), memory_forget the old entry before writing the new one.
 
-記憶について聞かれたら、記憶にあることだけを答えてください。記憶にないことは「覚えていない」とだけ答えてください。「話していない」と言い切ったり、「保存しないルール」「絶対に保存しない」と説明したりしないでください。名前などの個人情報を教えるように頼まないでください。`;
+### Format
+- One fact per entry, one short Japanese sentence.
+- Every entry starts with exactly one tag: [all] or [folder: <absolute path>]. Use the exact path shown as "Current working directory".
+- Do not use #tags, [[links]], or other tags.
+
+### How to use memory
+- Always use [all] entries: match the difficulty of explanations, the examples you choose, and how much you hint to the student's understanding and interests.
+- Use [folder: ...] entries only when the path equals the current working directory. Continue from where the student left off.
+- Ignore [folder: ...] entries for other paths. Do not mention their specific projects or plans, unless the student brings them up.
+- Entries without a tag were written before this policy; treat them as [all].
+
+### Answering questions about memory
+- Answer only from memory. If it is not in memory, say 「覚えていない」.
+
+- scratchpad and memory_search are not available in this environment. Do not use them.
+- This policy takes priority over the #tags / [[links]] guidance shown in the memory section.`;
 
 export const SAKUNYAN_MODES = [
   {

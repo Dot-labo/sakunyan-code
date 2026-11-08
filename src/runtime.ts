@@ -6,7 +6,7 @@ import {
   createAgentSessionFromServices, createAgentSessionRuntime, createAgentSessionServices,
   getAgentDir, initTheme, InteractiveMode, parseArgs, resolveCliModel,
   runPrintMode, runRpcMode, SessionManager, SettingsManager, VERSION,
-  type Args, type CreateAgentSessionRuntimeFactory, type PrintModeOptions,
+  type Args, type CreateAgentSessionRuntimeFactory, type PrintModeOptions, type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { sakunyanExtension } from "./extension.js";
 import { createGlobalSettings } from "./global-settings.js";
@@ -38,6 +38,27 @@ export async function createSakunyanRuntime(args: Args, sessionManager: SessionM
         ],
       },
     });
+    // pi-memory 0.4.2 announces qmd from session_start even when its search
+    // tools are inactive. Scope the filter to that extension and event only;
+    // keep its snapshot initialization and all unrelated notifications intact.
+    for (const extension of services.resourceLoader.getExtensions().extensions) {
+      if (dirname(extension.path) !== PI_MEMORY_PACKAGE_DIR) continue;
+      const handlers = extension.handlers.get("session_start") ?? [];
+      extension.handlers.set("session_start", handlers.map(handler => async (event, context) => {
+        const ctx = context as ExtensionContext;
+        const notify = ctx.ui.notify.bind(ctx.ui);
+        return handler(event, {
+          ...ctx,
+          ui: {
+            ...ctx.ui,
+            notify(message: string, type?: "info" | "warning" | "error") {
+              if (message.startsWith("memory_search requires qmd.")) return;
+              notify(message, type);
+            },
+          },
+        });
+      }));
+    }
     services.settingsManager = settingsManager;
     const model = resolveCliModel({ cliProvider: MODEL_PROVIDER, cliModel: MODEL_ID, modelRuntime: services.modelRuntime });
     if (model.error) throw new Error(model.error);
