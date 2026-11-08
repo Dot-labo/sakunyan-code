@@ -28,6 +28,9 @@ export class OpenRouter {
       if(usage.cost>reserve||this.spent>c.budget_usd){this.stopped=true;throw new BudgetStop('使用料金が見積もりを超えたため停止しました');}
       if(chunks.some(chunk=>(chunk.choices??[]).some(choice=>choice.finish_reason==='length'))){throw new OutputLimit(`${role}: 出力が上限に達したためシナリオは未完了です（採点しません）`);}
       return {status:response.status,headers:{'content-type':response.headers.get('content-type')??'application/json'},text};
+    } catch(e) {
+      if(!(e instanceof OutputLimit))this.stopped=true;
+      throw e;
     } finally {this.busy=false;}
   }
   async json(model,messages,reasoning,role='student',onRaw=()=>{}) {

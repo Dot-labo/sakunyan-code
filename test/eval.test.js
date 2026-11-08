@@ -337,3 +337,30 @@ test('daily records all six scenarios after ordinary or output-limit failures, b
   } finally {process.exitCode=previousExitCode;}
  });
 });
+
+test('daily stops after one scenario when transport or stream parsing fails',async()=>{
+ for(const failure of ['fetch','text','stream'])await temp(async dir=>{
+  let calls=0;
+  const provider=new OpenRouter(catalog.config,'synthetic',async()=>{
+   calls++;
+   if(failure==='fetch')throw new Error('synthetic connection timeout');
+   if(failure==='text')return {text:async()=>{throw new Error('synthetic body read failure');}};
+   return new Response('data: {bad json\n\ndata: [DONE]\n\n');
+  });
+  // Exercise streaming through the subject, after a successful fake student turn.
+  if(failure==='stream')provider.json=(...args)=>fakeProvider().json(...args);
+  const subjectFactory=failure==='stream'?async()=>({turn:()=>provider.request({model:'synthetic',stream:true}),close:async()=>{}}):fakeSubject;
+  const previousExitCode=process.exitCode;
+  try {
+   await main(['--fake','--daily','--output',dir],{provider,subjectFactory});
+   assert.equal(process.exitCode,1);
+   const result=JSON.parse(await readFile(resolve(dir,'runs/latest-fake.json'),'utf8'));
+   assert.equal(result.runs.length,1,failure);
+   assert.equal(result.runs[0].status,'incomplete');assert.equal(result.runs[0].score,null);
+   assert.equal(result.runs[0].budget_stopped,true);
+   assert.match(await readFile(resolve(dir,'report.md'),'utf8'),/未完了/);
+   assert.equal(provider.stopped,true);assert.equal(provider.busy,false);assert.equal(calls,1);
+   await assert.rejects(provider.request({model:'synthetic'}),BudgetStop);assert.equal(calls,1);
+  } finally {process.exitCode=previousExitCode;}
+ });
+});
