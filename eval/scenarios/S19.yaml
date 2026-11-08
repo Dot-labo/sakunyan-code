@@ -33,5 +33,9 @@
       "text": "生徒が CSV 集計を自動化する手順と、その方法を選ぶ理由を自分の言葉で説明できた",
       "check": "judge"
     }
-  ]
+  ],
+  "memory_required_turns": [
+    1
+  ],
+  "memory_required_reason": "初回の opening で、このフォルダで取り組む具体的な目標を伝えるため。"
 }

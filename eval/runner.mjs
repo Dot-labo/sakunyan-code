@@ -29,7 +29,7 @@ export async function applyEdits(cwd,edits) {
 }
 export async function runScenario(s,catalog,{provider,subjectFactory=createSubject,root=ROOT}={}) {
   const sandbox=await mkdtemp(resolve(tmpdir(),'sakunyan-eval-'));
-  const run={...s,turns:[],judge_responses:[],checks:{},goals:{},status:'running',score:null,usage:[],started_at:new Date().toISOString()};
+  const run={...s,turns:[],first_request_tools:null,judge_responses:[],checks:{},goals:{},status:'running',score:null,usage:[],started_at:new Date().toISOString()};
   const start=performance.now(),usageStart=provider.usage.length;
   let subject;
   try {
@@ -56,7 +56,8 @@ export async function runScenario(s,catalog,{provider,subjectFactory=createSubje
       const turnUsage=provider.usage.length;
       const turnStart=performance.now();
       const response=await subject.turn(student.text);
-      run.turns.push({student:student.text,assistant:response.assistant,calls:response.calls,cwd,folder,files_changed_by_subject:JSON.stringify(beforeFiles)!==JSON.stringify(await snapshot(cwd)),usage:provider.usage.slice(turnUsage),seconds:(performance.now()-turnStart)/1000});
+      run.first_request_tools??=response.first_request_tools??null;
+      run.turns.push({first_request_tools:response.first_request_tools??null,student:student.text,assistant:response.assistant,calls:response.calls,cwd,folder,files_changed_by_subject:JSON.stringify(beforeFiles)!==JSON.stringify(await snapshot(cwd)),usage:provider.usage.slice(turnUsage),seconds:(performance.now()-turnStart)/1000});
       // Do not end A→B→A before all scheduled folder transitions have been exercised.
       if(student.done&&transitions>=itinerary.length&&folder===itinerary.at(-1))break;
     }
@@ -81,6 +82,6 @@ export async function runScenario(s,catalog,{provider,subjectFactory=createSubje
     run.score=scoreRun(run.checks,weights(catalog.criteria,s.criteria,s.mode));
     run.status='complete';run.pass=run.score>=catalog.config.pass_score&&run.checks.C08?.pass!==false;
   }catch(e){run.status='incomplete';run.error=e.message;run.pass=false;run.budget_stopped=e instanceof BudgetStop||provider.stopped===true;}
-  finally {await subject?.close();await rm(sandbox,{recursive:true,force:true});run.seconds=(performance.now()-start)/1000;run.usage=provider.usage.slice(usageStart);}
+  finally {run.first_request_tools??=subject?.firstRequestTools??null;await subject?.close();await rm(sandbox,{recursive:true,force:true});run.seconds=(performance.now()-start)/1000;run.usage=provider.usage.slice(usageStart);}
   return run;
 }

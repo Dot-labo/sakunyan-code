@@ -64,7 +64,7 @@ test('production runtime uses both unchanged mode prompts through actual selecti
   const cwd=resolve(dir,mode+os),home=resolve(cwd,'home');await mkdir(home,{recursive:true});
   let seen;
   const provider=new OpenRouter(catalog.config,'fake',async (_url,options)=>{const body=JSON.parse(options.body);seen=body;const data={id:'test',object:'chat.completion.chunk',created:1,model:body.model,choices:[{index:0,delta:{role:'assistant',content:'動作確認です。'},finish_reason:null}]};return new Response(`data: ${JSON.stringify(data)}\n\ndata: ${JSON.stringify({...data,choices:[{index:0,delta:{},finish_reason:'stop'}],usage:{cost:.00001,prompt_tokens:1,completion_tokens:1,total_tokens:2}})}\n\ndata: [DONE]\n\n`,{headers:{'content-type':'text/event-stream'}});});
-  const subject=await createSubject({cwd,home,mode,os,provider});try{const turn=await subject.turn('こんにちは');assert.match(turn.assistant,/動作確認/);assert.deepEqual(seen.reasoning,productionReasoning);assert.equal(seen.max_completion_tokens,catalog.config.roles.sakunyan.max_output_tokens);assert.ok(!Object.hasOwn(seen,'max_tokens'));const system=seen.messages.filter(m=>m.role==='system').map(m=>m.content).join('\n');assert.ok(system.includes(`利用者の実行環境は${os}です。`),system);assert.match(system,mode==='tutor'?/4段より前に/:/教育アドバイザー/);assert.ok(!seen.tools.some(t=>['bash','write','edit'].includes(t.function.name)));}finally{await subject.close();}
+  const subject=await createSubject({cwd,home,mode,os,provider});try{const turn=await subject.turn('こんにちは');assert.match(turn.assistant,/動作確認/);assert.deepEqual(seen.reasoning,productionReasoning);assert.equal(seen.max_completion_tokens,catalog.config.roles.sakunyan.max_output_tokens);assert.ok(!Object.hasOwn(seen,'max_tokens'));const system=seen.messages.filter(m=>m.role==='system').map(m=>m.content).join('\n');assert.ok(system.includes(`利用者の実行環境は${os}です。`),system);assert.match(system,mode==='tutor'?/4段より前に/:/教育アドバイザー/);assert.ok(!seen.tools.some(t=>['bash','write','edit'].includes(t.function.name)));assert.deepEqual(turn.first_request_tools,seen.tools.map(t=>t.function.name));for(const name of ['memory_write','memory_read','memory_forget','memory_restore'])assert.ok(turn.first_request_tools.includes(name),`${mode}: ${name}`);}finally{await subject.close();}
  }
 }));
 
@@ -364,3 +364,33 @@ test('daily stops after one scenario when transport or stream parsing fails',asy
   } finally {process.exitCode=previousExitCode;}
  });
 });
+
+test('memory timing is opt-in and explicit first-turn goals remain required',async()=>{
+ const turns=[{cwd:'/work/A',assistant:'こんにちは。',calls:[]}];
+ assert.equal(machineCheck('C10',{turns}).pass,true);
+ assert.equal(machineCheck('C10',{turns,memory_required_turns:[1]}).pass,false);
+ assert.equal(machineCheck('C10',{turns:[{...turns[0],calls:[{name:'memory_write',arguments:{content:'untagged'}}]}]}).pass,false);
+ for(const id of ['S01','S03','S10','S19'])assert.deepEqual(catalog.scenarios[id].memory_required_turns,[1]);
+ for(const invalid of [[0],[1,1],[99],'1'])await assert.rejects(validateScenario({...catalog.scenarios.S01,memory_required_turns:invalid},catalog),/memory_required_turns/);
+});
+
+test('real worker executes memory_write before replying and records actual first request tools',async()=>temp(async dir=>{
+ const cwd=resolve(dir,'project'),home=resolve(dir,'home');await mkdir(cwd);await mkdir(home);
+ const base=fakeProvider();let requests=0;
+ const provider={...base,async request(body){
+  requests++;
+  if(requests>1)return base.request(body);
+  const delta={role:'assistant',tool_calls:[{index:0,id:'memory-test',type:'function',function:{name:'memory_write',arguments:JSON.stringify({target:'long_term',content:`[folder: ${cwd}] 名前を表示する課題を完成させたい。`,mode:'append'})}}]};
+  const chunk={id:'memory-test',object:'chat.completion.chunk',created:1,model:body.model,choices:[{index:0,delta,finish_reason:null}]};
+  const end={...chunk,choices:[{index:0,delta:{},finish_reason:'tool_calls'}],usage:{cost:0,prompt_tokens:1,completion_tokens:1,total_tokens:2}};
+  return {status:200,headers:{'content-type':'text/event-stream'},text:`data: ${JSON.stringify(chunk)}\n\ndata: ${JSON.stringify(end)}\n\ndata: [DONE]\n\n`};
+ }};
+ const subject=await createSubject({cwd,home,mode:'advisor',os:'Linux',provider});
+ try{
+  const turn=await subject.turn('名前を表示する課題を完成させたい。');
+  assert.equal(requests,2);assert.equal(turn.calls[0].name,'memory_write');
+  assert.ok(turn.first_request_tools.includes('memory_write'));
+  assert.match(await readFile(resolve(home,'.sakunyan/memory/MEMORY.md'),'utf8'),/名前を表示する課題を完成させたい/);
+  assert.equal(machineCheck('C10',{turns:[{...turn,cwd}],memory_required_turns:[1]}).pass,true);
+ }finally{await subject.close();}
+}));

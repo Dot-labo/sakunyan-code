@@ -59,6 +59,7 @@ export async function validateScenario(s,catalog,root=ROOT) {
     }
     if (!appliesToMode(criterion,s.mode)) throw new Error(`${s.id}: focus の ${id} は ${s.mode} の対象外です`);
   }
+  if (s.memory_required_turns !== undefined && (!Array.isArray(s.memory_required_turns) || s.memory_required_turns.some(n=>!Number.isInteger(n)||n<1||n>s.max_turns) || new Set(s.memory_required_turns).size!==s.memory_required_turns.length)) throw new Error(`${s.id}: memory_required_turns は範囲内の往復番号の配列です`);
   if (!Array.isArray(s.goals)||!s.goals.length) throw new Error(`${s.id}: ゴールがありません`);
   const ids=new Set();
   for (const g of s.goals) {
