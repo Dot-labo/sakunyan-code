@@ -74,7 +74,7 @@ test('report flags regression and token/time growth against comparable prior run
  const old={runs:[base],version:'old',catalog_signature:'same'};const current={version:'new',catalog_signature:'same',runs:[{...base,score:84,turns:[{seconds:2}],usage:[{prompt_tokens:200,completion_tokens:10}]}],models:{},budget:.8,spent:0,date:'now'};const text=report(current,old);assert.match(text,/不合格/);assert.match(text,/-6.00/);assert.match(text,/トークン\+20%超/);assert.match(text,/時間\+30%超/);
 });
 
-test('annual sample exposure is equal to within one run, with both modes daily',()=>{
+test('annual sample exposure is equal to within one run, with multiple grades and both modes daily',()=>{
  const scenarios=Object.values(catalog.scenarios),counts=Object.fromEntries(scenarios.map(s=>[s.id,0]));
  for(let day=0;day<365;day++) {
   const date=new Date(Date.UTC(2026,0,1+day)).toISOString().slice(0,10);
@@ -82,9 +82,11 @@ test('annual sample exposure is equal to within one run, with both modes daily',
   assert.deepEqual(sample,dailySample([...scenarios].reverse(),catalog.personas,date));
   assert.equal(sample.length,6);assert.equal(new Set(sample.map(s=>s.id)).size,6);
   const advisors=sample.filter(s=>s.mode==='advisor').length;assert.ok(advisors>=2&&advisors<=4);
+  assert.ok(new Set(sample.map(s=>catalog.personas[s.persona].grade_band)).size>=2,`${date}: 学年帯が偏っています`);
   for(const s of sample)counts[s.id]++;
  }
  assert.ok(Math.max(...Object.values(counts))-Math.min(...Object.values(counts))<=1,JSON.stringify(counts));
+ assert.ok(Object.values(counts).every(n=>n===109||n===110),JSON.stringify(counts));
  assert.equal(dailySample([],catalog.personas).length,0);
 });
 

@@ -20,7 +20,7 @@ node eval/cli.mjs --matrix --tasks python-name --modes advisor,tutor
 - `criteria/`: 1 基準 1 ファイル。追加時は `id / name / observes / threshold / method / weight / kind` を指定します。`method: judge` は追加コードなしで有効になります。`machine` の新しい判定方法は `checks.mjs` に実装・登録します。削除した既存 C01〜C16 はシナリオの重みに残っていても無効になり、有効な基準を合計 100 に再計算します。新規基準の既定重みも自動適用します。正規化した重みが0の基準は判定者へ渡しません。
 - `scenarios/`: 部品番号・モード・最大往復数・重みの上書き・独立したゴール。`focus` は元の表の主な観点で、点数は有効な全基準から算出します。
 
-`--scenario S01,S02` は複数指定できます。`--matrix` は `--personas P1,P8`・`--tasks csv-total`・`--modes advisor,tutor`・`--fixture csv-total` を組み合わせます。`--daily` はモードを交互に、同じモード内では学年帯を分散して並べた巡回表から日付に応じて6本選びます。全20本では毎日アドバイス2〜4本となり、365日で各シナリオ109〜110回です。学年帯は複数日で分散します。全学年を毎日必須にすると、小学生の1本だけが毎日固定されるため、その条件は設けません。候補が6本未満なら全候補を選びます。定期実行の登録は行いません。
+`--scenario S01,S02` は複数指定できます。`--matrix` は `--personas P1,P8`・`--tasks csv-total`・`--modes advisor,tutor`・`--fixture csv-total` を組み合わせます。`--daily` は各モードの列全体へ少数学年帯のシナリオを等間隔に配置し、モードを交互に並べた巡回表から日付に応じて6本選びます。全20本では毎日2学年帯以上・アドバイス2〜4本となり、365日で各シナリオ109〜110回です。全学年を毎日必須にすると、小学生の1本だけが毎日固定されるため、その条件は設けません。候補が6本未満なら全候補を選びます。定期実行の登録は行いません。
 
 `config.yaml` の `student_model` / `judge_model` は各1行で変更できます。判定者の推論は既定 high。sakunyan は `thinking` を上書きせず、本番 CLI と同じ pi の既定 high を使います。本体モデルは `src/model-config.ts` をそのまま使用します。モデル名や価格は実行前に OpenRouter で利用できる設定にしてください。
 

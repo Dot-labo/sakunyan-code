@@ -68,14 +68,18 @@ export function matrix(catalog,{personas=Object.keys(catalog.personas),tasks,fix
 export function dailySample(scenarios,personas,date=new Date().toISOString().slice(0,10)) {
   // One cyclic schedule gives each scenario the same exposure. Requiring every
   // grade every day would force the sole primary-school scenario to run daily.
+  const gradeCounts=new Map();
+  for(const s of scenarios){const grade=personas[s.persona].grade_band;gradeCounts.set(grade,(gradeCounts.get(grade)??0)+1);}
+  const dominantGrade=[...gradeCounts].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]))[0]?.[0];
   const byMode={advisor:[],tutor:[]};
   for(const mode of Object.keys(byMode)) {
-    const grades=new Map();
-    for(const s of [...scenarios].sort((a,b)=>a.id.localeCompare(b.id)).filter(s=>s.mode===mode)) {
-      const grade=personas[s.persona].grade_band;
-      if(!grades.has(grade))grades.set(grade,[]);grades.get(grade).push(s);
-    }
-    while([...grades.values()].some(xs=>xs.length))for(const xs of grades.values())if(xs.length)byMode[mode].push(xs.shift());
+    const candidates=[...scenarios].filter(s=>s.mode===mode).sort((a,b)=>a.id.localeCompare(b.id));
+    const majority=candidates.filter(s=>personas[s.persona].grade_band===dominantGrade);
+    const others=candidates.filter(s=>personas[s.persona].grade_band!==dominantGrade);
+    // Space minority-grade scenarios across each whole mode queue instead of
+    // exhausting them at its front and leaving a majority-only tail.
+    const slots=new Map(others.map((s,i)=>[Math.floor((i+.5)*candidates.length/others.length),s]));
+    byMode[mode]=Array.from({length:candidates.length},(_,i)=>slots.get(i)??majority.shift());
   }
   const ordered=[];
   while(byMode.advisor.length||byMode.tutor.length)for(const xs of Object.values(byMode))if(xs.length)ordered.push(xs.shift());
