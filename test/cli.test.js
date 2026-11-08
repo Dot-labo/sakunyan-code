@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { test } from "node:test";
 import { dirname, join } from "node:path";
@@ -293,18 +292,21 @@ test("チューターモードは読み取りだけで、手がかりを4段で�
   ]) assert.match(tutor.prompt, pattern);
 });
 
-test("アドバイスモードの定義は変わらず、大阪弁モードは選べない", async () => {
+test("アドバイスモードの基本方針を保ち、大阪弁モードは選べない", async () => {
   const advisor = getDefaultMode();
   assert.equal(advisor.id, "advisor");
   assert.equal(advisor.name, "アドバイスモード");
   assert.equal(advisor.description, "一緒に調べながら、考え方や手順を分かりやすく説明します。");
   assert.equal(advisor.notice, "ファイルの変更などは行わず、必要な操作は自分で実行できるように案内します。");
   assert.deepEqual([...advisor.tools], readOnlyAndMemoryTools);
-  // 指示文は、チューターモードを足す前（0.1.17）と1文字も変わらない。
-  assert.equal(
-    createHash("sha256").update(advisor.prompt).digest("hex"),
-    "7b6b38ce4c5e929c6283054c8640bcd192b1e0031def46864197af1d703d73a9",
-  );
+  assert.match(advisor.prompt, /300字以内/);
+  const tutor = SAKUNYAN_MODES.find(mode => mode.id === "tutor");
+  assert.match(tutor.prompt, /200字以内/);
+  assert.match(tutor.prompt, /理解の確認や最後の問いかけも合わせて1つまで/);
+  for (const mode of SAKUNYAN_MODES) assert.match(mode.prompt, /いちばん先の1〜2手だけ/);
+  assert.match(MEMORY_POLICY_PROMPT, /call memory_write BEFORE sending the answer/);
+  assert.match(MEMORY_POLICY_PROMPT, /prohibition on changing project files does not apply/);
+  assert.match(MEMORY_POLICY_PROMPT, /not already saved/);
   assert.match(advisor.prompt, /^あなたは sakunyanという名前のプログラミング教育アドバイザーです。/);
   assert.match(advisor.prompt, /必要に応じて、コマンドや変更例を提案する/);
 

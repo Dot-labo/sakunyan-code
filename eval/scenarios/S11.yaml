@@ -41,5 +41,7 @@
       "scene": "main.tscn",
       "evaluator": "godot-visible"
     }
-  ]
+  ],
+  "memory_required_any": true,
+  "memory_required_reason": "記憶の種が無い初回の会話で、目標やつまずきが分かるため、会話中に少なくとも1回保存する。"
 }

@@ -38,5 +38,7 @@
       "text": "最終 HTML で見出しタグが対応して閉じ、本文と見出しの構造が成立している。空白・属性・他の妥当な HTML も認める",
       "check": "judge"
     }
-  ]
+  ],
+  "memory_required_any": true,
+  "memory_required_reason": "記憶の種が無い初回の会話で、目標やつまずきが分かるため、会話中に少なくとも1回保存する。"
 }

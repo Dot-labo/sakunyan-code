@@ -37,5 +37,9 @@
       "text": "最終コードで敵の x 座標が更新のたびに変わる。加算代入以外の同等な書き方も認める",
       "check": "judge"
     }
-  ]
+  ],
+  "memory_required_turns": [
+    1
+  ],
+  "memory_required_reason": "初回の opening で、このフォルダで取り組む具体的な目標を伝えるため。"
 }

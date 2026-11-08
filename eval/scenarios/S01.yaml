@@ -37,5 +37,9 @@
       "text": "最終コードが名前を表示する有効な Python になっている。引用符・表示する名前・変数経由などの別解も認める",
       "check": "judge"
     }
-  ]
+  ],
+  "memory_required_turns": [
+    1
+  ],
+  "memory_required_reason": "初回の opening で、このフォルダで取り組む具体的な目標を伝えるため。"
 }

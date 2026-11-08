@@ -32,5 +32,9 @@
       "text": "生徒が最初に作るゲームの具体的な動きと、Godot でノードを追加する場所を説明できた",
       "check": "judge"
     }
-  ]
+  ],
+  "memory_required_turns": [
+    1
+  ],
+  "memory_required_reason": "初回の opening で、このフォルダで取り組む具体的な目標を伝えるため。"
 }
