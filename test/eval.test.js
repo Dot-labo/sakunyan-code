@@ -121,7 +121,7 @@ test('length termination for any role is unscored and recorded as incomplete',as
    return original(model,messages,reasoning,role);
   };
   const run=await runScenario(catalog.scenarios.S01,catalog,{provider,subjectFactory:role==='sakunyan'?factory:fakeSubject});
-  assert.equal(run.status,'incomplete');assert.equal(run.score,null);assert.deepEqual(run.checks,{});assert.equal(calls,1);assert.equal(provider.spent,.00001);await assert.rejects(provider.request({model:'fake'},role),/停止/);assert.equal(calls,1);
+  assert.equal(run.status,'incomplete');assert.equal(run.score,null);assert.deepEqual(run.checks,{});assert.equal(calls,role==='student'?2:1);assert.equal(provider.spent,.00001*calls);const count=calls;await assert.rejects(provider.request({model:'fake'},role),/停止/);assert.equal(calls,count);
   assert.match(run.error,/出力が上限/);
   const text=report({runs:[run],models:{},budget:.8,spent:provider.spent});assert.match(text,/未完了/);assert.match(text,/未採点/);
  }
@@ -280,3 +280,31 @@ test('fake CLI uses worker and completes S01 offline', {timeout:30000},async()=>
   }
   for(const scenario of Object.values(catalog.scenarios))await validateScenario(scenario,catalog);
  });
+
+test('student length retries once with identical input, reasoning and full budget reservation',async()=>{
+ for(const outcome of ['recover','length','budget','missing-cost','http']) {
+  const config=structuredClone(catalog.config),bodies=[];
+  const provider=new OpenRouter(config,'synthetic',async(_url,options)=>{
+   bodies.push(JSON.parse(options.body));
+   if(outcome==='http')return new Response('{}',{status:500});
+   if(outcome==='budget')config.budget_usd=.00001;
+   const length=bodies.length===1||outcome==='length';
+   return new Response(JSON.stringify({usage:outcome==='missing-cost'?{}:{cost:.00001,completion_tokens_details:{reasoning_tokens:length?8192:10}},choices:[{finish_reason:length?'length':'stop',message:{content:length?'':JSON.stringify({text:'困った',edits:[],done:true})}}]}));
+  });
+  const original=provider.json.bind(provider);let turns=0;
+  provider.json=(model,messages,reasoning,role,...rest)=>role==='student'?original(model,messages,reasoning,role,...rest):fakeProvider().json(model,messages);
+  const run=await runScenario(catalog.scenarios.S01,{...catalog,config},{provider,subjectFactory:async()=>({turn:async()=>{turns++;return {assistant:'助言',calls:[]};},close:async()=>{}})});
+  assert.equal(run.status,outcome==='recover'?'complete':'incomplete',outcome);
+  assert.equal(turns,outcome==='recover'?1:0);
+  assert.equal(bodies.length,['recover','length'].includes(outcome)?2:1);
+  assert.deepEqual(bodies[0].reasoning,{effort:'low'});assert.equal(bodies[0].max_tokens,8192);
+  if(bodies.length===2)assert.deepEqual(bodies[0],bodies[1]);
+  if(['recover','length'].includes(outcome))assert.equal(provider.spent,.00002);
+  if(outcome==='budget'){assert.equal(provider.spent,.00001);assert.match(run.error,/費用の上限/);}
+ }
+});
+test('student reasoning can disable reasoning with none',async()=>{
+ let body;
+ const provider=new OpenRouter(catalog.config,'synthetic',async(_url,options)=>{body=JSON.parse(options.body);return new Response(JSON.stringify({usage:{cost:0},choices:[{finish_reason:'stop',message:{content:'{}'}}]}));});
+ await provider.json('fake',[],'none','student');assert.deepEqual(body.reasoning,{effort:'none'});
+});

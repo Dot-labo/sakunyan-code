@@ -23,7 +23,8 @@ export async function loadCatalog(root = ROOT) {
     }
   }
   catalog.config = parse(await readFile(resolve(root,'config.yaml'),'utf8'));
-  requireFields(catalog.config,['student_model','judge_model','judge_reasoning','budget_usd','roles','pass_score'],'config.yaml');
+  requireFields(catalog.config,['student_model','judge_model','judge_reasoning','student_reasoning','budget_usd','roles','pass_score'],'config.yaml');
+  if(!['low','none'].includes(catalog.config.student_reasoning))throw new Error('config.yaml: student_reasoning は low または none です');
   if(!Number.isFinite(catalog.config.budget_usd)||catalog.config.budget_usd<=0)throw new Error('config.yaml: budget_usd が不正です');
   for(const role of ['sakunyan','student','judge'])for(const key of ['max_output_tokens','max_price_prompt','max_price_completion']){const value=catalog.config.roles?.[role]?.[key];if(!Number.isFinite(value)||value<=0||(key==='max_output_tokens'&&!Number.isInteger(value)))throw new Error(`config.yaml: roles.${role}.${key} が不正です`);}
   if(!Number.isFinite(catalog.config.pass_score)||catalog.config.pass_score<0||catalog.config.pass_score>100)throw new Error('config.yaml: pass_score が不正です');

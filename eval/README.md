@@ -24,17 +24,17 @@ node eval/cli.mjs --matrix --tasks python-name --modes advisor,tutor
 
 `--scenario S01,S02` は複数指定できます。`--matrix` は `--personas P1,P8`・`--tasks csv-total`・`--modes advisor,tutor`・`--fixture csv-total` を組み合わせます。`--daily` は各モードの列全体へ少数学年帯のシナリオを等間隔に配置し、モードを交互に並べた巡回表から日付に応じて6本選びます。全20本では毎日2学年帯以上・アドバイス2〜4本となり、365日で各シナリオ109〜110回です。全学年を毎日必須にすると、小学生の1本だけが毎日固定されるため、その条件は設けません。候補が6本未満なら全候補を選びます。定期実行の登録は行いません。
 
-`config.yaml` の `student_model` / `judge_model` は各1行で変更できます。判定者の推論は既定 high。sakunyan は `thinking` を上書きせず、本番 CLI と同じ pi の既定 high を使います。本体モデルは `src/model-config.ts` をそのまま使用します。モデル名や価格は実行前に OpenRouter で利用できる設定にしてください。
+`config.yaml` の `student_model` / `judge_model` は各1行で変更できます。生徒役の推論は `student_reasoning: low` が既定です。変更先のモデルが low に対応しない場合は `none` に設定してください（自動判定はしません）。判定者の推論は既定 high。sakunyan は `thinking` を上書きせず、本番 CLI と同じ pi の既定 high を使います。本体モデルは `src/model-config.ts` をそのまま使用します。モデル名や価格は実行前に OpenRouter で利用できる設定にしてください。
 
 `config.yaml` の `roles` に出力上限（推論トークンを含む）と provider の価格上限を役別に置きます。価格は100万トークン当たりのドルです。ユーザー指定の11/8時点の価格に小さな余裕を加えています。
 
 | 役 | 出力上限 | 入力価格上限 | 出力価格上限 |
 | --- | --- | --- | --- |
 | sakunyan | 16,384 | $0.10 | $0.20 |
-| student | 4,096 | $0.06 | $0.60 |
+| student | 8,192 | $0.06 | $0.60 |
 | judge（推論 high + 判定 JSON） | 32,768 | $1.10 | $5.50 |
 
-**評価時の出力上限は本番との差分です。** sakunyan では pi の `max_completion_tokens` を16,384に置き換え、`max_tokens` は送りません。生徒役・判定役にはそれぞれの `max_tokens` だけを送ります。どの役でも `finish_reason: length`（本体の `stopReason: length` も）があれば、料金を記録したうえでそのシナリオを「未完了・未採点」にし、以後の採点と実行を止めます。JSON がたまたま解析できても採点しません。
+**評価時の出力上限は本番との差分です。** sakunyan では pi の `max_completion_tokens` を16,384に置き換え、`max_tokens` は送りません。生徒役・判定役にはそれぞれの `max_tokens` だけを送ります。生徒役だけは `finish_reason: length` のとき同じ入力を1回だけ費用上限内で再試行し、両方の料金を積算します。2回目も length、または再試行の予約額が残額を超える場合は未完了です。それ以外の役でも `finish_reason: length`（本体の `stopReason: length` も）があれば、料金を記録したうえでそのシナリオを「未完了・未採点」にし、以後の採点と実行を止めます。JSON がたまたま解析できても採点しません。
 
 費用の上限は既定 $0.8（`--budget 0.4` で変更）。3役すべてのモデル通信を同じゲートウェイへ通します。各呼び出し前に、入力の UTF-8 バイト数・実際に送信する役別の出力上限・OpenRouter の provider 価格上限から保守的に料金を予約し、終了後に返された `usage.cost` を積算します。料金欠落・料金超過・通信エラーで追加呼び出しを止め、途中までの結果を保存します。OpenRouter の価格上限に合う提供者がない場合も停止します。上限近くでは残額があっても呼び出せないことがあります。
 

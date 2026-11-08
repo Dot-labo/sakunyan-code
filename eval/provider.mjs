@@ -1,8 +1,9 @@
 export class InvalidModelJSON extends Error {}
+export class OutputLimit extends Error {}
 export class BudgetStop extends Error {}
 export class OpenRouter {
   constructor(config,key,fetcher=fetch) {this.config=config;this.key=key;this.fetcher=fetcher;this.spent=0;this.usage=[];this.busy=false;this.stopped=false;}
-  async request(body,role='sakunyan',onResponse=()=>{}) {
+  async request(body,role='sakunyan',onResponse=()=>{},retryStudentLength=false) {
     if(this.busy||this.stopped)throw new BudgetStop('費用を安全に確認できないため停止しました');
     const c=this.config,limits=c.roles[role];
     if(!limits)throw new Error(`知らないモデルの役: ${role}`);
@@ -25,14 +26,22 @@ export class OpenRouter {
       if(!Number.isFinite(usage?.cost)||usage.cost<0){this.stopped=true;throw new BudgetStop('使用料金が返らなかったため、追加の呼び出しを止めました');}
       this.spent+=usage.cost;this.usage.push({role,model:body.model,...usage});
       if(usage.cost>reserve||this.spent>c.budget_usd){this.stopped=true;throw new BudgetStop('使用料金が見積もりを超えたため停止しました');}
-      if(chunks.some(chunk=>(chunk.choices??[]).some(choice=>choice.finish_reason==='length'))){this.stopped=true;throw new Error(`${role}: 出力が上限に達したためシナリオは未完了です（採点しません）`);}
+      if(chunks.some(chunk=>(chunk.choices??[]).some(choice=>choice.finish_reason==='length'))){this.stopped=!(role==='student'&&retryStudentLength);throw new OutputLimit(`${role}: 出力が上限に達したためシナリオは未完了です（採点しません）`);}
       return {status:response.status,headers:{'content-type':response.headers.get('content-type')??'application/json'},text};
     } finally {this.busy=false;}
   }
   async json(model,messages,reasoning,role='student',onRaw=()=>{}) {
-    const r=await this.request({model,messages,...(reasoning?{reasoning:{effort:reasoning}}:{}),response_format:{type:'json_object'}},role,chunks=>onRaw(chunks[0]?.choices?.[0]?.message?.content));
-    const data=JSON.parse(r.text),raw=data.choices?.[0]?.message?.content;
-    try{return JSON.parse(raw);}catch{throw new InvalidModelJSON('モデルの JSON 応答を読み取れませんでした');}
+    for(let attempt=0;attempt<2;attempt++) {
+      try {
+        const r=await this.request({model,messages,...(reasoning?{reasoning:{effort:reasoning}}:{}),response_format:{type:'json_object'}},role,chunks=>onRaw(chunks[0]?.choices?.[0]?.message?.content),role==='student'&&attempt===0);
+        const data=JSON.parse(r.text),raw=data.choices?.[0]?.message?.content;
+        try{return JSON.parse(raw);}catch{throw new InvalidModelJSON('モデルの JSON 応答を読み取れませんでした');}
+      } catch(e) {
+        // The first length response is charged before retrying the identical turn.
+        // request reserves the full output limit again using the remaining budget.
+        if(!(e instanceof OutputLimit)||role!=='student'||attempt===1)throw e;
+      }
+    }
   }
 }
 export function validateJudgment(value,criteria,goals,turns) {
