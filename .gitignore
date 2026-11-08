@@ -4,3 +4,5 @@ dist/
 
 # Local evaluation transcripts and judgments
 eval/runs/
+
+.env.keys
