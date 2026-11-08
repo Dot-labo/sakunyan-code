@@ -16,6 +16,7 @@ export function machineCheck(id,run) {
       if(!/^(\[all\]|\[folder: [^\]]+\])\s*[^\n]+$/.test(text)||(text.match(/\[all\]|\[folder:/g)??[]).length!==1||/#[^\s]|\[\[/.test(text)||(/[。！？]/g.test(text)&& (text.match(/[。！？]/g)??[]).length>1)|| (text.startsWith('[folder:')&&!text.startsWith(`[folder: ${c.cwd}]`)))fail(c.turn,'記憶の札・文の形式が不正です');
     }
     // Scenarios identify the exact turns where an observable fact requires a memory write.
+    if(run.memory_required_any===true&&!calls.some(c=>c.name==='memory_write'))fail(1,'会話の中で記憶を一度も書かなかった');
     const required=run.memory_required_turns??[],missing=required.filter(n=>!calls.some(c=>c.name==='memory_write'&&c.turn===n));
     if(required.length&&missing.length/required.length>.2)for(const n of missing)fail(n,'分かった返事の中で記憶を書かなかった');
     for(const change of run.memory_replacements??[]){const events=calls.filter(c=>c.turn===change.turn);const forget=events.findIndex(c=>c.name==='memory_forget'&&JSON.stringify(c.arguments).includes(change.match));const write=events.findIndex(c=>c.name==='memory_write');if(forget<0||write<0||forget>write)fail(change.turn,'変わった記憶を消してから書いていない');}

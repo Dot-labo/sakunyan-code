@@ -59,6 +59,7 @@ export async function validateScenario(s,catalog,root=ROOT) {
     }
     if (!appliesToMode(criterion,s.mode)) throw new Error(`${s.id}: focus の ${id} は ${s.mode} の対象外です`);
   }
+  if (s.memory_required_any !== undefined && typeof s.memory_required_any !== 'boolean') throw new Error(`${s.id}: memory_required_any は真偽値です`);
   if (s.memory_required_turns !== undefined && (!Array.isArray(s.memory_required_turns) || s.memory_required_turns.some(n=>!Number.isInteger(n)||n<1||n>s.max_turns) || new Set(s.memory_required_turns).size!==s.memory_required_turns.length)) throw new Error(`${s.id}: memory_required_turns は範囲内の往復番号の配列です`);
   if (!Array.isArray(s.goals)||!s.goals.length) throw new Error(`${s.id}: ゴールがありません`);
   const ids=new Set();
@@ -79,7 +80,7 @@ export function weights(criteria, overrides={}, mode) {
   return Object.fromEntries(active.map(c=>[c.id,100*(overrides[c.id]??c.weight)/total]));
 }
 export function matrix(catalog,{personas=Object.keys(catalog.personas),tasks,fixtures,modes=['advisor','tutor']}) {
-  return personas.flatMap(p=>tasks.flatMap(t=>modes.map(m=>({id:`${p}-${t}-${m}`,persona:p,task:t,fixture:fixtures?.[t]??t,mode:m,criteria:{},max_turns:8,goals:[{id:'understanding',text:`生徒が「${catalog.tasks[t]?.objective}」に必要な変更と次の操作を自分の言葉で説明できた`,check:'judge'}]}))));
+  return personas.flatMap(p=>tasks.flatMap(t=>modes.map(m=>({id:`${p}-${t}-${m}`,persona:p,task:t,fixture:fixtures?.[t]??t,mode:m,criteria:{},memory_required_any:true,max_turns:8,goals:[{id:'understanding',text:`生徒が「${catalog.tasks[t]?.objective}」に必要な変更と次の操作を自分の言葉で説明できた`,check:'judge'}]}))));
 }
 export function dailySample(scenarios,personas,date=new Date().toISOString().slice(0,10)) {
   // One cyclic schedule gives each scenario the same exposure. Requiring every

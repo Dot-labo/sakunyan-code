@@ -64,7 +64,7 @@ test('production runtime uses both unchanged mode prompts through actual selecti
   const cwd=resolve(dir,mode+os),home=resolve(cwd,'home');await mkdir(home,{recursive:true});
   let seen;
   const provider=new OpenRouter(catalog.config,'fake',async (_url,options)=>{const body=JSON.parse(options.body);seen=body;const data={id:'test',object:'chat.completion.chunk',created:1,model:body.model,choices:[{index:0,delta:{role:'assistant',content:'動作確認です。'},finish_reason:null}]};return new Response(`data: ${JSON.stringify(data)}\n\ndata: ${JSON.stringify({...data,choices:[{index:0,delta:{},finish_reason:'stop'}],usage:{cost:.00001,prompt_tokens:1,completion_tokens:1,total_tokens:2}})}\n\ndata: [DONE]\n\n`,{headers:{'content-type':'text/event-stream'}});});
-  const subject=await createSubject({cwd,home,mode,os,provider});try{const turn=await subject.turn('こんにちは');assert.match(turn.assistant,/動作確認/);assert.deepEqual(seen.reasoning,productionReasoning);assert.equal(seen.max_completion_tokens,catalog.config.roles.sakunyan.max_output_tokens);assert.ok(!Object.hasOwn(seen,'max_tokens'));const system=seen.messages.filter(m=>m.role==='system').map(m=>m.content).join('\n');assert.ok(system.includes(`利用者の実行環境は${os}です。`),system);assert.match(system,mode==='tutor'?/4段より前に/:/教育アドバイザー/);assert.ok(!seen.tools.some(t=>['bash','write','edit'].includes(t.function.name)));assert.deepEqual(turn.first_request_tools,seen.tools.map(t=>t.function.name));for(const name of ['memory_write','memory_read','memory_forget','memory_restore'])assert.ok(turn.first_request_tools.includes(name),`${mode}: ${name}`);}finally{await subject.close();}
+  const subject=await createSubject({cwd,home,mode,os,provider});try{const turn=await subject.turn('こんにちは');assert.match(turn.assistant,/動作確認/);assert.deepEqual(seen.reasoning,productionReasoning);assert.equal(seen.max_completion_tokens,catalog.config.roles.sakunyan.max_output_tokens);assert.ok(!Object.hasOwn(seen,'max_tokens'));const system=seen.messages.filter(m=>m.role==='system').map(m=>m.content).join('\n');assert.ok(system.includes(`利用者の実行環境は${os}です。`),system);const checklist=system.slice(system.lastIndexOf('## 返事を出す直前の最終チェック'));assert.ok(checklist.includes(mode==='tutor'?'200字以内':'300字以内'));assert.ok(!checklist.includes(mode==='tutor'?'300字以内':'200字以内'));assert.match(checklist,/返事を書く前に、新しく分かった事実/);assert.match(checklist,/target.*daily/);assert.match(checklist,/WindowsのPowerShell/);assert.ok(system.lastIndexOf('## 返事を出す直前の最終チェック')>system.lastIndexOf('</classroom_rules>'));if(mode==='tutor')assert.match(checklist,/問いは返事全体で最大1つ/);assert.match(system,mode==='tutor'?/4段より前に/:/教育アドバイザー/);assert.ok(!seen.tools.some(t=>['bash','write','edit'].includes(t.function.name)));assert.deepEqual(turn.first_request_tools,seen.tools.map(t=>t.function.name));for(const name of ['memory_write','memory_read','memory_forget','memory_restore'])assert.ok(turn.first_request_tools.includes(name),`${mode}: ${name}`);}finally{await subject.close();}
  }
 }));
 
@@ -394,3 +394,20 @@ test('real worker executes memory_write before replying and records actual first
   assert.equal(machineCheck('C10',{turns:[{...turn,cwd}],memory_required_turns:[1]}).pass,true);
  }finally{await subject.close();}
 }));
+
+
+test('unseeded conversations fail C10 without any writes, including tutor and matrix',async()=>{
+ const excluded=['S06','S07','S08','S09','S12','S18','S20'];
+ const turns=[{cwd:'/work/A',assistant:'手順を説明します。',calls:[]},{cwd:'/work/A',assistant:'続けます。',calls:[]}];
+ const later=structuredClone(turns);later[1].calls=[{name:'memory_write',arguments:{content:'[folder: /work/A] シグナル接続でつまずいている。'}}];
+ for(const scenario of Object.values(catalog.scenarios)){
+  if(excluded.includes(scenario.id)){assert.equal(machineCheck('C10',{...scenario,turns}).pass,true,scenario.id);continue;}
+  assert.equal(machineCheck('C10',{...scenario,turns}).pass,false,scenario.id);
+  if(scenario.memory_required_any){assert.equal(machineCheck('C10',{...scenario,turns:later}).pass,true,scenario.id);}
+ }
+ for(const scenario of matrix(catalog,{personas:['P1'],tasks:['python-name']}))assert.equal(machineCheck('C10',{...scenario,turns}).pass,false);
+ const malformed=structuredClone(later);malformed[1].calls[0].arguments.content='札なし';
+ assert.equal(machineCheck('C10',{memory_required_any:true,turns:malformed}).pass,false);
+ assert.equal(machineCheck('C10',{memory_required_any:true,memory_required_turns:[1],turns:later}).pass,false);
+ await assert.rejects(validateScenario({...catalog.scenarios.S02,memory_required_any:'true'},catalog),/memory_required_any/);
+});

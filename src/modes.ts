@@ -5,6 +5,7 @@ export type SakunyanMode = {
   description: string;
   notice: string;
   prompt: string;
+  replyChecklist: string;
   tools: readonly string[];
 };
 
@@ -53,9 +54,33 @@ Memory exists to remember the student (mostly elementary school children): what 
 - scratchpad and memory_search are not available in this environment. Do not use them.
 - This policy takes priority over the #tags / [[links]] guidance shown in the memory section.`;
 
+// 共通ルールの後、system prompt の末尾に置く。切り詰め処理ではなく生成時の指示。
+function replyChecklist(limit: number, tutor = false): string {
+  return `## 返事を出す直前の最終チェック
+以下は選択中のモードの出力条件。説明を全部盛り込むより、この条件の中で次の一歩を伝える。
+
+1. 返事を書く前に、新しく分かった事実（目標・つまずき・利用者が明言した環境・進捗）を memory_write する。初回も対象。「覚えておく」と返すだけでは保存にならない。プロジェクトのファイルを変更しない制約は、記憶専用ツールの利用を禁じない。
+- 例「名前を表示する課題を動かしたい」→ memory_write({"target":"long_term","content":"[folder: <作業フォルダの絶対パス>] 名前を表示する課題を完成させたい。","mode":"append"})
+- 例「ボタンを押しても反応せず、シグナルのつなぎ方が分からない」→ memory_write({"target":"daily","content":"[folder: <作業フォルダの絶対パス>] ボタンのシグナル接続でつまずいている。","mode":"append"})
+- 例「WindowsのPowerShellを使っている」→ memory_write({"target":"long_term","content":"[all] WindowsのPowerShellを使っている。","mode":"append"})
+<作業フォルダの絶対パス> は Current working directory の実際のパスに置き換える。1件1文で、複数の事実は別の呼び出しに分ける。既存の記憶に同じ事実があれば重複させず、変わった事実は古い記憶を memory_forget してから書く。新事実のない挨拶や操作依頼だけなら書かない。推測した環境や個人情報・秘密は保存しない。
+
+2. 利用者に見える1回の返事全体を${limit}字以内にする。ツールの前後の文章・空白・改行・コード・見出しも合計する。ツール実行前の「まず調べます」等の前置きは書かず、必要なツールを直接呼ぶ。余裕を持って${tutor ? 140 : 220}字程度を目安に下書きする。
+- 今回扱うのは、いま進めるための1点だけ。質問が複数でも全部に長く答えず、先に必要な1点を選ぶ。理由は短い1文、操作は、いちばん先の1〜2手だけ。まだ行わない手順・別案・復習のまとめ・長い見出しは省く。続きは聞かれたら出す。
+- コードは今回変える最小の行だけ。完成ファイルや長いコードの再掲で字数を使い切らない。長ければ内容を次の往復に分け、途中で文やコードを切らない。
+- 例「CSVを読んで集計してグラフも出したい」への今回の返事：「まずCSVを読む準備から。先頭に import csv を追加してね。CSVの行を読み分けるための道具だよ。集計とグラフはその後に進めよう。」
+- 例「見出しの閉じ忘れを直したい」への今回の返事：「6行目の </body> の前に </h1> を足してね。見出しの終わりを示すためだよ。」全文のHTMLは載せない。
+${tutor ? `
+3. 問いは返事全体で最大1つ。理解の確認や最後の問いかけも合わせて1つまで。説明用の疑問文・引用した問い・質問形の見出しも問いに数える。「どんなことを書く？ 自分で書けそう？」のように重ねない。複数の問いを1文にまとめない。「どんなことを書く？」だけを残す。問いが不要なら0個でよい。
+- 例「openとcsv.readerの違いと、その後の集計も知りたい」には、まず「openはファイルを開き、csv.readerは各行をカンマで分ける道具です。まず読むところだけ進めましょう。」と説明する。必要な問いを1つだけ添える。集計のコードや追加の理解確認は次に回す。
+- 4段の手がかりのうち今回必要な段だけを出す。答えを見せた後の確認問題も最大1つの枠を使う。` : ''}
+送信前に、記憶ツールの実行漏れ・字数${tutor ? '・問いの数' : ''}を確認し、超えていれば扱う内容を減らして短い返事を書き直す。`;
+}
+
 export const SAKUNYAN_MODES = [
   {
     id: "advisor",
+    replyChecklist: replyChecklist(300),
     name: "アドバイスモード",
     description: "一緒に調べながら、考え方や手順を分かりやすく説明します。",
     notice: "ファイルの変更などは行わず、必要な操作は自分で実行できるように案内します。",
@@ -92,6 +117,7 @@ export const SAKUNYAN_MODES = [
   },
   {
     id: "tutor",
+    replyChecklist: replyChecklist(200, true),
     name: "チューターモード",
     description: "自分で考えて作れるように、ヒントを少しずつ出します。",
     notice: "すぐに答えを出さないことがあります。ファイルの変更などは行いません。",

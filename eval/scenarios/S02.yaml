@@ -39,5 +39,7 @@
       "text": "最終コードが名前を表示する有効な Python になっている。引用符・表示する名前・変数経由などの別解も認める",
       "check": "judge"
     }
-  ]
+  ],
+  "memory_required_any": true,
+  "memory_required_reason": "記憶の種が無い初回の会話で、目標やつまずきが分かるため、会話中に少なくとも1回保存する。"
 }

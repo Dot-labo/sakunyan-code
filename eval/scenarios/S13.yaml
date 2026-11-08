@@ -37,5 +37,7 @@
       "text": "最終コードが実在する data.csv を CSV として読み込む。絶対パス・相対パス・pathlib 等の別解も認める",
       "check": "judge"
     }
-  ]
+  ],
+  "memory_required_any": true,
+  "memory_required_reason": "記憶の種が無い初回の会話で、目標やつまずきが分かるため、会話中に少なくとも1回保存する。"
 }
