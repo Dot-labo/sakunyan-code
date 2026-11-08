@@ -155,3 +155,62 @@ test('CLI shows specific errors while redacting the dedicated key value',()=>{
  const unknown=invoke(['--fake','--scenario','S99']);assert.equal(unknown.status,1);assert.match(unknown.stderr,/知らないシナリオ: S99/);
  const redacted=invoke(['--fake','--scenario','SYNTHETIC_KEY'],'SYNTHETIC_KEY');assert.equal(redacted.status,1);assert.ok(!redacted.stderr.includes('SYNTHETIC_KEY'));assert.match(redacted.stderr,/REDACTED/);
 });
+
+test('passing criteria allow empty evidence; failures and invalid numbers do not',()=>{
+ const value={checks:{C11:{pass:true,score:100,reason:'違反なし',evidence:[]}},goals:{}};
+ assert.equal(validateJudgment(value,['C11'],[],1),value);
+ value.checks.C11.pass=false;assert.throws(()=>validateJudgment(value,['C11'],[],1),/不正/);
+ value.checks.C11.evidence=[1];assert.equal(validateJudgment(value,['C11'],[],1),value);
+ for(const evidence of [[0],[2],['1']]){value.checks.C11.evidence=evidence;assert.throws(()=>validateJudgment(value,['C11'],[],1),/不正/);}
+});
+
+test('every scenario ignores first-turn edits and permits edits after advice',async()=>{
+ for(const scenario of Object.values(catalog.scenarios)) {
+  const provider=fakeProvider(),json=provider.json.bind(provider);let count=0;const seen=[];
+  provider.json=async(model,messages,...rest)=>{
+   if(model!==catalog.config.student_model)return json(model,messages,...rest);
+   assert.match(messages[0].content,/最初の発言.*典型的な入力例/);
+   return {text:++count===1?'わからん':'直してみた',edits:[{path:'edit-probe.txt',content:'after advice'}],done:count>1};
+  };
+  const subjectFactory=async({cwd})=>({async turn(){seen.push(await readFile(resolve(cwd,'edit-probe.txt'),'utf8').catch(e=>{if(e.code==='ENOENT')return null;throw e;}));return {assistant:'助言',calls:[]};},async close(){}});
+  const run=await runScenario({...scenario,max_turns:Math.max(2,scenario.max_turns)},catalog,{provider,subjectFactory});
+  assert.equal(run.status,'complete',scenario.id);assert.equal(seen[0],null,scenario.id);assert.equal(seen[1],'after advice',scenario.id);
+ }
+});
+
+test('invalid judge JSON retries once, records raw responses and obeys remaining budget',async()=>{
+ for(const mode of ['recover','invalid','budget','schema']) {
+  let calls=0;
+  const provider=new OpenRouter(structuredClone(catalog.config),'synthetic',async(_url,options)=>{
+   calls++;const body=JSON.parse(options.body),input=JSON.parse(body.messages[1].content);
+   const valid={checks:Object.fromEntries(input.criteria.map(c=>[c.id,{pass:true,score:100,reason:'違反なし',evidence:[]}])),goals:Object.fromEntries(input.goals.map(g=>[g.id,{pass:true,reason:'確認'}]))};
+   const raw=calls===1?(mode==='schema'?JSON.stringify({checks:{},goals:{}}):'{broken'):(mode==='invalid'?'{broken':JSON.stringify(valid));
+   return new Response(JSON.stringify({usage:{cost:.00001},choices:[{message:{content:raw}}]}));
+  });
+  const original=provider.json.bind(provider);
+  provider.json=async(model,messages,reasoning,role='student',onRaw)=>{
+   if(role!=='judge')return fakeProvider().json(model,messages);
+   if(mode==='budget'&&calls===1)provider.config.budget_usd=provider.spent;
+   return original(model,messages,reasoning,role,onRaw);
+  };
+  const run=await runScenario(catalog.scenarios.S01,catalog,{provider,subjectFactory:fakeSubject});
+  assert.equal(calls,mode==='budget'?1:2);assert.equal(run.judge_responses.length,calls);
+  assert.equal(run.judge_responses[0].raw,mode==='schema'?'{"checks":{},"goals":{}}':'{broken');
+  assert.equal(run.status,['recover','schema'].includes(mode)?'complete':'incomplete');
+  assert.equal(provider.usage.length,calls);
+ }
+});
+
+test('real CLI explains build prerequisite when dist is absent without contacting models',async()=>temp(async dir=>{
+ await cp(ROOT,resolve(dir,'eval'),{recursive:true,filter:p=>!p.includes('/runs')});
+ await symlink(resolve(ROOT,'../node_modules'),resolve(dir,'node_modules'));
+ const result=spawnSync(process.execPath,[resolve(dir,'eval/cli.mjs'),'--scenario','S01'],{encoding:'utf8',env:{PATH:process.env.PATH,SAKUNYAN_EVAL_OPENROUTER_KEY:'synthetic'}});
+ assert.equal(result.status,1);assert.match(result.stderr,/先に npm run build を実行してください/);
+}));
+
+test('raw judge content is retained even when output hits the length limit',async()=>{
+ const provider=new OpenRouter(catalog.config,'synthetic',async()=>new Response(JSON.stringify({usage:{cost:.00001},choices:[{finish_reason:'length',message:{content:'{"partial":'}}]})));
+ let raw;
+ await assert.rejects(provider.json('fake',[],undefined,'judge',value=>{raw=value;}),/出力が上限/);
+ assert.equal(raw,'{"partial":');
+});

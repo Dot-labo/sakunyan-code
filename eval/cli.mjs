@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -21,6 +21,10 @@ export async function main(args=process.argv.slice(2)) {
   if(options['--validate']){console.log(`部品の検査 OK: ${Object.keys(catalog.personas).length}人 / ${Object.keys(catalog.scenarios).length}本 / ${Object.keys(catalog.criteria).length}基準`);return;}
   const key=process.env.SAKUNYAN_EVAL_OPENROUTER_KEY;
   if(!options['--fake']&&!key)throw new Error('評価用のキー SAKUNYAN_EVAL_OPENROUTER_KEY がありません。評価は実行しません。担当者に開発用キーの設定を頼んでください。');
+  if(!options['--fake']) {
+    try{await access(new URL('../dist/runtime.js',import.meta.url));}
+    catch{throw new Error('ビルド済みの dist がありません。先に npm run build を実行してください。');}
+  }
   const c=catalog.config;
   if(options['--budget'])c.budget_usd=Number(options['--budget']);
   for(const field of ['budget_usd'])if(!Number.isFinite(c[field])||c[field]<=0)throw new Error(`${field} は正の数にしてください`);
