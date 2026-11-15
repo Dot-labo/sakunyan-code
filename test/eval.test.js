@@ -147,7 +147,7 @@ test('zero-weight judge criteria are omitted and final files are available to ju
  const provider=fakeProvider(),json=provider.json.bind(provider);let seen;
  provider.json=async(model,messages,...rest)=>{if(model===catalog.config.judge_model)seen=JSON.parse(messages[1].content);return json(model,messages,...rest);};
  const scenario=structuredClone(catalog.scenarios.S01);scenario.criteria.C01=0;
- const run=await runScenario(scenario,catalog,{provider,subjectFactory:fakeSubject});assert.equal(run.status,'complete');assert.ok(!seen.criteria.some(c=>c.id==='C01'));assert.ok(!run.checks.C01);assert.match(seen.final_files['main.py'],/pritn/);
+ const run=await runScenario(scenario,catalog,{provider,subjectFactory:fakeSubject});assert.equal(run.status,'complete');assert.ok(!seen.criteria.some(c=>c.id==='C01'));assert.ok(!JSON.stringify(seen).includes('C01'));assert.ok(!run.checks.C01);assert.match(seen.final_files['main.py'],/pritn/);
 });
 
 test('CLI shows specific errors while redacting the dedicated key value',()=>{
