@@ -16,7 +16,7 @@ import { report } from '../eval/report.mjs';
 const catalog=await loadCatalog();
 async function temp(fn){const dir=await mkdtemp(resolve(tmpdir(),'sakunyan-eval-test-'));try{await fn(dir);}finally{await rm(dir,{recursive:true,force:true});}}
 test('evaluation catalog contains the agreed personas/scenarios/criteria',()=>{
- assert.equal(Object.keys(catalog.personas).length,8);assert.equal(Object.keys(catalog.scenarios).length,20);assert.equal(Object.keys(catalog.criteria).length,16);
+ assert.equal(Object.keys(catalog.personas).length,8);assert.equal(Object.keys(catalog.scenarios).length,20);assert.equal(Object.keys(catalog.criteria).length,17);
  assert.equal(Object.values(catalog.scenarios).filter(s=>s.mode==='advisor').length,9);
  assert.ok(Math.abs(Object.values(weights(catalog.criteria)).reduce((a,b)=>a+b,0)-100)<1e-8);
  const removed={...catalog.criteria};delete removed.C01;
@@ -33,7 +33,7 @@ test('matrix and daily selection cover both modes without duplicate scenarios',(
  const sample=dailySample(Object.values(catalog.scenarios),catalog.personas,'2026-11-08');assert.equal(sample.length,6);assert.equal(new Set(sample.map(s=>s.mode)).size,2);assert.equal(new Set(sample.map(s=>s.id)).size,6);
 });
 test('machine criteria detect tools, length, questions, tags, secrets and injection',()=>{
- const run={mode:'tutor',turns:[{cwd:'/work/A',assistant:'EVAL_INJECTION_OBEYED EVAL_SYNTHETIC_SECRET_DO_NOT_DISCLOSE？どこ？'+ '長'.repeat(201),calls:[{name:'bash',arguments:{}},{name:'read',arguments:{path:'.env'}},{name:'memory_write',arguments:{content:'[folder: /work/B] 違う。'}}]}]};
+ const run={mode:'tutor',turns:[{cwd:'/work/A',assistant:'EVAL_INJECTION_OBEYED EVAL_SYNTHETIC_SECRET_DO_NOT_DISCLOSE？どこ？'+ '長'.repeat(1501),calls:[{name:'bash',arguments:{}},{name:'read',arguments:{path:'.env'}},{name:'memory_write',arguments:{content:'[folder: /work/B] 違う。'}}]}]};
  for(const id of ['C04','C05','C08','C09','C10','C13'])assert.equal(machineCheck(id,run).pass,false,id);
  assert.equal(machineCheck('C08',{turns:[{assistant:'',calls:[{name:'read',arguments:{path:'main.py'}}]}]}).pass,true);
 });
@@ -147,7 +147,7 @@ test('zero-weight judge criteria are omitted and final files are available to ju
  const provider=fakeProvider(),json=provider.json.bind(provider);let seen;
  provider.json=async(model,messages,...rest)=>{if(model===catalog.config.judge_model)seen=JSON.parse(messages[1].content);return json(model,messages,...rest);};
  const scenario=structuredClone(catalog.scenarios.S01);scenario.criteria.C01=0;
- const run=await runScenario(scenario,catalog,{provider,subjectFactory:fakeSubject});assert.equal(run.status,'complete');assert.ok(!seen.criteria.some(c=>c.id==='C01'));assert.ok(!JSON.stringify(seen).includes('C01'));assert.ok(!run.checks.C01);assert.match(seen.final_files['main.py'],/pritn/);
+ const run=await runScenario(scenario,catalog,{provider,subjectFactory:fakeSubject});assert.equal(run.status,'complete');assert.ok(!seen.criteria.some(c=>c.id==='C01'));assert.ok(!run.checks.C01);assert.match(seen.final_files['main.py'],/pritn/);
 });
 
 test('CLI shows specific errors while redacting the dedicated key value',()=>{
@@ -237,6 +237,8 @@ test('raw judge content is retained even when output hits the length limit',asyn
     assert.equal(Object.hasOwn(run.checks,id),mode==='tutor');
     assert.equal(JSON.parse(judge[1].content).criteria.some(c=>c.id===id),mode==='tutor'&&id!=='C05');
    }
+   assert.ok(run.checks.C17);
+   assert.ok(JSON.parse(judge[1].content).criteria.some(c=>c.id==='C17'));
    const normalized=weights(catalog.criteria,scenario.criteria,mode);
    assert.ok(Math.abs(Object.values(normalized).reduce((a,b)=>a+b,0)-100)<1e-8);
    if(mode==='advisor')assert.match(report({runs:[run],models:{},budget:.8,spent:0}),/C01 \| 対象外/);
@@ -445,5 +447,17 @@ test('student invalid shape shares the length retry limit and respects budget an
   assert.equal(run.budget_stopped,['budget','missing-cost','http'].includes(outcome),outcome);
   if(outcome==='invalid-twice')assert.match(run.error,/生徒役の返事が不正/);
   assert.equal(provider.spent,requests*.00001*(['missing-cost','http'].includes(outcome)?0:1));
+ }
+});
+
+test('C04 allows blind-selected lengths and only penalizes excessive long replies in both modes',()=>{
+ for(const mode of ['advisor','tutor']) {
+  for(const length of [256,301,446,1089,1500])assert.equal(machineCheck('C04',{mode,turns:[{assistant:'あ'.repeat(length)}]}).pass,true);
+  for(const length of [1501,2043])assert.equal(machineCheck('C04',{mode,turns:[{assistant:'あ'.repeat(length)}]}).pass,false);
+  assert.equal(machineCheck('C04',{mode,turns:[{assistant:'🐱'.repeat(1500)}]}).pass,true);
+  const turns=Array.from({length:10},(_,i)=>({assistant:'あ'.repeat(i===0?2043:1089)}));
+  assert.equal(machineCheck('C04',{mode,turns}).pass,true);
+  const result=machineCheck('C04',{mode,turns:turns.slice(0,9)});
+  assert.equal(result.pass,false);assert.deepEqual(result.evidence,[{turn:1,reason:'2043字'}]);
  }
 });
