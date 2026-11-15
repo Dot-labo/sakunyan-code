@@ -50,3 +50,7 @@ node eval/cli.mjs --matrix --tasks python-name --modes advisor,tutor
 テストは `npm test`（ビルド込み）、評価のみならビルド後に `node --test test/eval.test.js`。APIキーは不要です。作業フォルダ・隔離 HOME・子プロセスは実行終了時に片付けます。
 
 C04 は両モードとも1500字を超える返事が全体の10%を超えた場合だけ減点します（本文を Unicode コードポイントで数え、思考は含めません）。[ブラインド結果](https://github.com/Dot-labo/sakunyan-code/issues/62#issuecomment-6891624696)と[追記](https://github.com/Dot-labo/sakunyan-code/issues/62#issuecomment-6891645883)に合わせ、1089字や別の例でヒントを出した446字は長さだけで減点しません。
+
+`node eval/cli.mjs --rejudge <runs/*.json> --criteria C04,C17 --turns 1 --budget 0.2 --output /tmp/rejudge` で保存会話を現在の基準で再採点します（`--fake` で無料確認）。
+`--criteria` 省略時は有効な全採点基準、`--turns` 省略時は全往復を使い、指定時は先頭N往復だけを機械・判定者の両方に渡します。生徒・被験者モデルは呼びません。
+元ファイルは変更せず、新しい `runs/rejudge-*.json` と `report.md` に出力します（出力先省略時は別ディレクトリ）。ゴール・最終ファイルは再評価せず、費用・使用量は今回の判定者分だけです。

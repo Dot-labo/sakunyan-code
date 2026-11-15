@@ -9,6 +9,7 @@ export function report(result,previous) {
   const delta=comparable?score-mean(old.map(r=>r.score)):null;
   const passed=completed.length===result.runs.length&&completed.length>0&&completed.every(r=>r.pass)&&!(delta!==null&&delta<=-5);
   const lines=['# sakunyan 評価レポート','',`版: ${result.version} / commit: ${result.commit} / 日時: ${result.date}`,`モデル: ${JSON.stringify(result.models)} / 前回版: ${previous?.version??'なし'}`,`実行: ${result.fake?'偽物（品質評価には使えません）':'実モデル'} / 完了 ${completed.length}/${result.runs.length}`,`全体 C16: ${completed.length?fmt(score):'未採点'} / ${passed?'合格':'不合格'} / 前回との差: ${delta===null?'比較不可':fmt(delta)}`,`費用: $${fmt(result.spent)} / 上限 $${result.budget}`, ''];
+  if(result.rejudge)lines.push(`保存会話の再採点: ${clean(result.rejudge.source)} / 基準: ${result.rejudge.criteria.join(',')} / 往復: ${result.rejudge.turns??'全て'}。ゴール・最終ファイルは再評価しません。往復ごとの時間・使用量は保存時の記録で、今回の費用・run使用量は再採点分です。`,'');
   function table(title,headers,rows){lines.push(`## ${title}`,'',`| ${headers.join(' | ')} |`,`| ${headers.map(()=> '---').join(' | ')} |`,...rows.map(row=>`| ${row.map(clean).join(' | ')} |`),'');}
   table('シナリオ別',['番号','モード','ペルソナ','点','判定'],result.runs.map(r=>[r.id,r.mode,r.persona,r.status==='complete'?fmt(r.score):'未採点',r.status==='complete'?(r.pass?'合格':'不合格'):`未完了: ${r.error}`]));
   const criteria=[...new Set(completed.flatMap(r=>[...Object.keys(r.checks),...(r.not_applicable??[])]))].sort();

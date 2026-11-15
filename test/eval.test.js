@@ -461,3 +461,43 @@ test('C04 allows blind-selected lengths and only penalizes excessive long replie
   assert.equal(result.pass,false);assert.deepEqual(result.evidence,[{turn:1,reason:'2043字'}]);
  }
 });
+
+test('rejudge preserves saved dialogue, slices both judging and machine checks, and never creates subjects',async()=>temp(async dir=>{
+ const source=resolve(dir,'saved.json');
+ const turns=[{student:'自分で直したい',assistant:'ヒントです',calls:[],seconds:3},{student:'次の相談',assistant:'長'.repeat(2043),calls:[],seconds:4}];
+ const saved={version:'old',runs:[{...catalog.scenarios.S08,turns,checks:{C04:{score:0}},goals:{old:{pass:false}}}]};
+ const original=JSON.stringify(saved);await writeFile(source,original);
+ for(const count of [undefined,'1']) {
+  const provider=fakeProvider(),json=provider.json.bind(provider);const inputs=[];
+  provider.request=()=>{throw new Error('subject transport must not run');};
+  provider.json=async(model,messages,reasoning,role,...rest)=>{assert.equal(role,'judge');assert.equal(model,catalog.config.judge_model);inputs.push(JSON.parse(messages[1].content));return json(model,messages,reasoning,role,...rest);};
+  const output=resolve(dir,count?'first':'all');
+  const result=await main(['--rejudge',source,'--fake','--criteria','C04,C17','--budget','0.2','--output',output,...(count?['--turns',count]:[])],{provider,subjectFactory:()=>{throw new Error('subject must not be created');}});
+  assert.equal(inputs.length,1);assert.deepEqual(inputs[0].turns,count?turns.slice(0,1):turns);
+  assert.deepEqual(inputs[0].criteria.map(c=>c.id),['C17']);assert.deepEqual(inputs[0].goals,[]);
+  assert.equal(result.runs[0].checks.C04.pass,!!count);assert.deepEqual(Object.keys(result.runs[0].checks).sort(),['C04','C17']);
+  assert.deepEqual(result.runs[0].goals,{});assert.equal(result.rejudge.turns,count?1:null);
+  assert.match(await readFile(resolve(output,'report.md'),'utf8'),/C17/);
+  const {readdir}=await import('node:fs/promises');const files=await readdir(resolve(output,'runs'));assert.equal(files.length,1);assert.match(files[0],/^rejudge-/);
+  assert.equal(JSON.parse(await readFile(resolve(output,'runs',files[0]),'utf8')).runs[0].turns.length,count?1:2);
+ }
+ assert.equal(await readFile(source,'utf8'),original);
+}));
+
+test('rejudge machine-only is offline and invalid selections fail before model calls',async()=>temp(async dir=>{
+ const source=resolve(dir,'saved.json');await writeFile(source,JSON.stringify({runs:[{...catalog.scenarios.S08,turns:[{student:'質問',assistant:'回答',calls:[]}]}]}));
+ const provider=fakeProvider();provider.json=()=>{throw new Error('no judge expected');};
+ const base=['--rejudge',source,'--fake','--output',resolve(dir,'out')];
+ const result=await main([...base,'--criteria','C04'],{provider});assert.equal(result.runs[0].checks.C04.pass,true);
+ for(const extra of [['--criteria','C99'],['--criteria','C04,C04'],['--turns','0'],['--turns','1.5'],['--budget','0'],['--scenario','S08']])await assert.rejects(main([...base,...extra],{provider}));
+}));
+
+test('rejudge budget stops before network and writes an incomplete result',async()=>temp(async dir=>{
+ const source=resolve(dir,'saved.json');await writeFile(source,JSON.stringify({runs:[{...catalog.scenarios.S08,turns:[{student:'質問',assistant:'回答',calls:[]}]}]}));
+ const provider=new OpenRouter({...catalog.config,budget_usd:.000001},'synthetic',()=>{throw new Error('network must not run');});
+ const exitCode=process.exitCode;
+ try {
+  const result=await main(['--rejudge',source,'--fake','--criteria','C04,C17','--budget','0.000001','--output',resolve(dir,'out')],{provider});
+  assert.equal(result.runs[0].status,'incomplete');assert.equal(result.runs[0].budget_stopped,true);assert.equal(result.spent,0);assert.equal(result.runs[0].score,null);
+ }finally{process.exitCode=exitCode;}
+}));
