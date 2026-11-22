@@ -1,5 +1,6 @@
 import { readFile, writeFile, mkdir, realpath } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { randomUUID, createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { weights, appliesToMode } from './catalog.mjs';
@@ -29,7 +30,7 @@ export async function rejudge(options,catalog,injectedProvider) {
   if(needsJudge&&!options['--fake']&&!injectedProvider&&!key)throw new Error('評価用のキー SAKUNYAN_EVAL_OPENROUTER_KEY がありません');
   const provider=injectedProvider??(options['--fake']?fakeProvider():new OpenRouter(config,key));
   // A separate directory and unique filename protect the input, including latest.json.
-  const output=resolve(options['--output']??resolve(source,'..','..',`rejudge-${randomUUID()}`));
+  const output=resolve(options['--output']??resolve(fileURLToPath(new URL('./runs/',import.meta.url)),`rejudge-${randomUUID()}`));
   await mkdir(resolve(output,'runs'),{recursive:true});
   const pkg=JSON.parse(await readFile(new URL('../package.json',import.meta.url),'utf8'));
   let commit='unknown';try{commit=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();}catch{}

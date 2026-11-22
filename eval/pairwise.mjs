@@ -1,5 +1,6 @@
 import { readFile, writeFile, mkdir, realpath } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { randomUUID, createHash } from 'node:crypto';
 import { appliesToMode } from './catalog.mjs';
 import { machineCheck } from './checks.mjs';
@@ -49,7 +50,7 @@ export async function pairwise(options,catalog,injectedProvider) {
   const key=process.env.SAKUNYAN_EVAL_OPENROUTER_KEY;
   if(!options['--fake']&&!injectedProvider&&!key)throw new Error('評価用のキー SAKUNYAN_EVAL_OPENROUTER_KEY がありません');
   const provider=injectedProvider??(options['--fake']?fakeProvider():new OpenRouter(config,key));
-  const output=resolve(options['--output']??`pairwise-${randomUUID()}`);await mkdir(resolve(output,'runs'),{recursive:true});
+  const output=resolve(options['--output']??resolve(fileURLToPath(new URL('./runs/',import.meta.url)),`pairwise-${randomUUID()}`));await mkdir(resolve(output,'runs'),{recursive:true});
   const result={date:new Date().toISOString(),fake:!!options['--fake'],model:config.judge_model,budget:config.budget_usd,spent:0,sources,source_hashes:saved.map(hash),criteria:criterionIds.map(id=>catalog.criteria[id]),turns:limit??null,pairs:pairs.map(p=>({id:p.id,status:'not_run',winner:null,votes:[],dialogue_hashes:{A:hash(p.A),B:hash(p.B)}})),usage:[]};
   const destination=resolve(output,'runs',`pairwise-${randomUUID()}.json`);
   const save=async()=>{

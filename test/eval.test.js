@@ -585,3 +585,24 @@ test('fake pairwise CLI writes new results without a model key',async()=>temp(as
  const result=spawnSync(process.execPath,[resolve('eval/cli.mjs'),'--fake','--pairwise',a,'--against',b,'--turns','1','--output',resolve(dir,'out')],{encoding:'utf8',env:{PATH:process.env.PATH},timeout:10000});
  assert.equal(result.status,0,result.stderr);assert.match(await readFile(resolve(dir,'out/report.md'),'utf8'),/引き分け: 1/);
 }));
+
+test('saved-conversation default outputs stay in repository eval/runs regardless of cwd or input location',async()=>temp(async dir=>{
+ const {dirname,basename}=await import('node:path');
+ const {readdir}=await import('node:fs/promises');
+ const [a,b]=await pairFiles(dir),outputs=[];
+ const cli=resolve(ROOT,'cli.mjs');
+ try {
+  for(const [kind,args] of [['rejudge',['--rejudge',a]],['pairwise',['--pairwise',a,'--against',b]]]) {
+   const result=spawnSync(process.execPath,[cli,'--fake',...args,'--criteria','C04','--turns','1'],{cwd:dir,encoding:'utf8',env:{PATH:process.env.PATH},timeout:10000});
+   assert.equal(result.status,0,result.stderr);
+   const match=result.stdout.match(/保存しました: (.+\/report\.md)/);assert.ok(match,result.stdout);
+   const reportPath=match[1],output=dirname(reportPath);outputs.push(output);
+   assert.equal(dirname(output),resolve(ROOT,'runs'));
+   assert.ok(basename(output).startsWith(`${kind}-`));
+   assert.equal(execFileSync('git',['check-ignore',reportPath],{cwd:resolve(ROOT,'..'),encoding:'utf8'}).trim(),reportPath);
+   assert.match(await readFile(reportPath,'utf8'),/偽物/);
+   const files=await readdir(resolve(output,'runs'));assert.equal(files.length,1);assert.ok(files[0].startsWith(`${kind}-`));
+  }
+  assert.deepEqual((await readdir(dir)).sort(),['a.json','b.json']);
+ }finally{await Promise.all(outputs.map(output=>rm(output,{recursive:true,force:true})));}
+}));

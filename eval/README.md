@@ -52,8 +52,8 @@ C04 は両モードとも1500字を超える返事が全体の10%を超えた場
 
 `node eval/cli.mjs --rejudge <runs/*.json> --criteria C04,C03 --turns 1 --budget 0.2 --output /tmp/rejudge` で保存会話を現在の基準で再採点します（`--fake` で無料確認）。
 `--criteria` 省略時は有効な全採点基準、`--turns` 省略時は全往復を使い、指定時は先頭N往復だけを機械・判定者の両方に渡します。生徒・被験者モデルは呼びません。
-元ファイルは変更せず、新しい `runs/rejudge-*.json` と `report.md` に出力します（出力先省略時は別ディレクトリ）。ゴール・最終ファイルは再評価せず、費用・使用量は今回の判定者分だけです。
+元ファイルは変更せず、新しい `runs/rejudge-*.json` と `report.md` に出力します（出力先省略時はリポジトリの `eval/runs/rejudge-<uuid>/`）。ゴール・最終ファイルは再評価せず、費用・使用量は今回の判定者分だけです。
 
-`node eval/cli.mjs --pairwise <A版のruns.json> --against <B版のruns.json> --scenario S08,S15 --turns 1 --budget 0.5 --output /tmp/pairwise` で、同じ場面・モード・課題・ペルソナの保存会話を比較します（`--scenario` 省略時は全場面、`--turns` 省略時は全往復、`--fake` で無料確認）。判定観点は対象モードの既存criteria（`--criteria C03,C04` 等で限定可）で、正順・逆順の2回だけ判定し、元のA/Bへ戻した票が一致しなければ引き分けとします。生徒・被験者モデルは呼ばず、新しい `runs/pairwise-*.json` と `report.md` にA/B/引き分け・短い理由・費用を保存します。未完了や未実行は引き分けに含めません。
+`node eval/cli.mjs --pairwise <A版のruns.json> --against <B版のruns.json> --scenario S08,S15 --turns 1 --budget 0.5 --output /tmp/pairwise` で、同じ場面・モード・課題・ペルソナの保存会話を比較します（`--scenario` 省略時は全場面、`--turns` 省略時は全往復、`--fake` で無料確認）。判定観点は対象モードの既存criteria（`--criteria C03,C04` 等で限定可）で、正順・逆順の2回だけ判定し、元のA/Bへ戻した票が一致しなければ引き分けとします。生徒・被験者モデルは呼ばず、新しい `runs/pairwise-*.json` と `report.md` にA/B/引き分け・短い理由・費用を保存します。未完了や未実行は引き分けに含めません。出力先省略時はリポジトリの `eval/runs/pairwise-<uuid>/` に保存します。両方の既定出力先はgit除外済みの `eval/runs/` 配下で、今いるフォルダや入力ファイルの場所には依存しません。
 
 再採点とペア比較の判定者出力は推論込み8192トークンを上限とします（通常の会話評価は従来どおり）。料金予約は、この実際に送信する出力上限と既存の入力・価格上限から計算し、各応答の実費を同じ予算へ積算します。小さな予算を32768トークン分の予約で使い切ることを防ぎ、出力上限に達した場合は未完了にして採点しません。C17は比較で差が出なかったため取り下げました。番号は再利用しません。
