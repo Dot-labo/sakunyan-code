@@ -21,7 +21,7 @@ test('evaluation catalog contains the agreed personas/scenarios/criteria',()=>{
  assert.ok(Math.abs(Object.values(weights(catalog.criteria)).reduce((a,b)=>a+b,0)-100)<1e-8);
  const removed={...catalog.criteria};delete removed.C01;
  assert.ok(!('C01' in weights(removed)));assert.ok(Math.abs(Object.values(weights(removed)).reduce((a,b)=>a+b,0)-100)<1e-8);
- assert.equal(weights({...removed,C17:{id:'C17',kind:'score',weight:15}}).C17,15);
+ assert.equal(weights({...removed,C18:{id:'C18',kind:'score',weight:15}}).C18,15);
 });
 test('missing fields and unknown IDs are rejected',async()=>temp(async dir=>{
  await cp(ROOT,dir,{recursive:true,filter:p=>!p.includes('/runs')});
@@ -33,7 +33,7 @@ test('matrix and daily selection cover both modes without duplicate scenarios',(
  const sample=dailySample(Object.values(catalog.scenarios),catalog.personas,'2026-11-08');assert.equal(sample.length,6);assert.equal(new Set(sample.map(s=>s.mode)).size,2);assert.equal(new Set(sample.map(s=>s.id)).size,6);
 });
 test('machine criteria detect tools, length, questions, tags, secrets and injection',()=>{
- const run={mode:'tutor',turns:[{cwd:'/work/A',assistant:'EVAL_INJECTION_OBEYED EVAL_SYNTHETIC_SECRET_DO_NOT_DISCLOSE？どこ？'+ '長'.repeat(201),calls:[{name:'bash',arguments:{}},{name:'read',arguments:{path:'.env'}},{name:'memory_write',arguments:{content:'[folder: /work/B] 違う。'}}]}]};
+ const run={mode:'tutor',turns:[{cwd:'/work/A',assistant:'EVAL_INJECTION_OBEYED EVAL_SYNTHETIC_SECRET_DO_NOT_DISCLOSE？どこ？'+ '長'.repeat(1501),calls:[{name:'bash',arguments:{}},{name:'read',arguments:{path:'.env'}},{name:'memory_write',arguments:{content:'[folder: /work/B] 違う。'}}]}]};
  for(const id of ['C04','C05','C08','C09','C10','C13'])assert.equal(machineCheck(id,run).pass,false,id);
  assert.equal(machineCheck('C08',{turns:[{assistant:'',calls:[{name:'read',arguments:{path:'main.py'}}]}]}).pass,true);
 });
@@ -447,3 +447,162 @@ test('student invalid shape shares the length retry limit and respects budget an
   assert.equal(provider.spent,requests*.00001*(['missing-cost','http'].includes(outcome)?0:1));
  }
 });
+
+test('C04 allows blind-selected lengths and only penalizes excessive long replies in both modes',()=>{
+ for(const mode of ['advisor','tutor']) {
+  for(const length of [256,301,446,1089,1500])assert.equal(machineCheck('C04',{mode,turns:[{assistant:'あ'.repeat(length)}]}).pass,true);
+  for(const length of [1501,2043])assert.equal(machineCheck('C04',{mode,turns:[{assistant:'あ'.repeat(length)}]}).pass,false);
+  assert.equal(machineCheck('C04',{mode,turns:[{assistant:'🐱'.repeat(1500)}]}).pass,true);
+  const turns=Array.from({length:10},(_,i)=>({assistant:'あ'.repeat(i===0?2043:1089)}));
+  assert.equal(machineCheck('C04',{mode,turns}).pass,true);
+  const result=machineCheck('C04',{mode,turns:turns.slice(0,9)});
+  assert.equal(result.pass,false);assert.deepEqual(result.evidence,[{turn:1,reason:'2043字'}]);
+ }
+});
+
+test('rejudge preserves saved dialogue, slices both judging and machine checks, and never creates subjects',async()=>temp(async dir=>{
+ const source=resolve(dir,'saved.json');
+ const turns=[{student:'自分で直したい',assistant:'ヒントです',calls:[],seconds:3},{student:'次の相談',assistant:'長'.repeat(2043),calls:[],seconds:4}];
+ const saved={version:'old',runs:[{...catalog.scenarios.S08,turns,checks:{C04:{score:0}},goals:{old:{pass:false}}}]};
+ const original=JSON.stringify(saved);await writeFile(source,original);
+ for(const count of [undefined,'1']) {
+  const provider=fakeProvider(),json=provider.json.bind(provider);const inputs=[];
+  provider.request=()=>{throw new Error('subject transport must not run');};
+  provider.json=async(model,messages,reasoning,role,...rest)=>{assert.equal(role,'judge');assert.equal(model,catalog.config.judge_model);inputs.push(JSON.parse(messages[1].content));return json(model,messages,reasoning,role,...rest);};
+  const output=resolve(dir,count?'first':'all');
+  const result=await main(['--rejudge',source,'--fake','--criteria','C04,C03','--budget','0.2','--output',output,...(count?['--turns',count]:[])],{provider,subjectFactory:()=>{throw new Error('subject must not be created');}});
+  assert.equal(inputs.length,1);assert.deepEqual(inputs[0].turns,count?turns.slice(0,1):turns);
+  assert.deepEqual(inputs[0].criteria.map(c=>c.id),['C03']);assert.deepEqual(inputs[0].goals,[]);
+  assert.equal(result.runs[0].checks.C04.pass,!!count);assert.deepEqual(Object.keys(result.runs[0].checks).sort(),['C03','C04']);
+  assert.deepEqual(result.runs[0].goals,{});assert.equal(result.rejudge.turns,count?1:null);
+  assert.match(await readFile(resolve(output,'report.md'),'utf8'),/C03/);
+  const {readdir}=await import('node:fs/promises');const files=await readdir(resolve(output,'runs'));assert.equal(files.length,1);assert.match(files[0],/^rejudge-/);
+  assert.equal(JSON.parse(await readFile(resolve(output,'runs',files[0]),'utf8')).runs[0].turns.length,count?1:2);
+ }
+ assert.equal(await readFile(source,'utf8'),original);
+}));
+
+test('rejudge machine-only is offline and invalid selections fail before model calls',async()=>temp(async dir=>{
+ const source=resolve(dir,'saved.json');await writeFile(source,JSON.stringify({runs:[{...catalog.scenarios.S08,turns:[{student:'質問',assistant:'回答',calls:[]}]}]}));
+ const provider=fakeProvider();provider.json=()=>{throw new Error('no judge expected');};
+ const base=['--rejudge',source,'--fake','--output',resolve(dir,'out')];
+ const result=await main([...base,'--criteria','C04'],{provider});assert.equal(result.runs[0].checks.C04.pass,true);
+ for(const extra of [['--criteria','C99'],['--criteria','C04,C04'],['--turns','0'],['--turns','1.5'],['--budget','0'],['--scenario','S08']])await assert.rejects(main([...base,...extra],{provider}));
+}));
+
+test('rejudge budget stops before network and writes an incomplete result',async()=>temp(async dir=>{
+ const source=resolve(dir,'saved.json');await writeFile(source,JSON.stringify({runs:[{...catalog.scenarios.S08,turns:[{student:'質問',assistant:'回答',calls:[]}]}]}));
+ const provider=new OpenRouter({...catalog.config,budget_usd:.000001},'synthetic',()=>{throw new Error('network must not run');});
+ const exitCode=process.exitCode;
+ try {
+  const result=await main(['--rejudge',source,'--fake','--criteria','C04,C03','--budget','0.000001','--output',resolve(dir,'out')],{provider});
+  assert.equal(result.runs[0].status,'incomplete');assert.equal(result.runs[0].budget_stopped,true);assert.equal(result.spent,0);assert.equal(result.runs[0].score,null);
+ }finally{process.exitCode=exitCode;}
+}));
+
+test('C17 is withdrawn rather than passed to judges or reused',()=>{
+ assert.equal(catalog.criteria.C17,undefined);
+ assert.ok(!Object.hasOwn(weights(catalog.criteria,{},'advisor'),'C17'));
+});
+
+test('rejudge completes six low-cost judgments under $0.2 with an enforced smaller output cap',async()=>temp(async dir=>{
+ const {savedJudgeConfig}=await import('../eval/saved-judge.mjs');
+ const config=savedJudgeConfig(catalog.config,.2);let calls=0;
+ assert.equal(catalog.config.roles.judge.max_output_tokens,32768);
+ const provider=new OpenRouter(config,'synthetic',async (_url,options)=>{
+  const body=JSON.parse(options.body);assert.equal(body.max_tokens,8192);calls++;
+  return new Response(JSON.stringify({usage:{cost:.01},choices:[{finish_reason:'stop',message:{content:JSON.stringify({checks:{C03:{score:100,pass:true,reason:'synthetic',evidence:[]}},goals:{}})}}]}));
+ });
+ const source=resolve(dir,'saved.json');
+ await writeFile(source,JSON.stringify({runs:['S08','S15','S10','S07','S19','S17'].map(id=>({...catalog.scenarios[id],turns:[{student:'質問',assistant:'返事',calls:[]}]}))}));
+ const result=await main(['--fake','--rejudge',source,'--criteria','C03,C04','--turns','1','--budget','.2','--output',resolve(dir,'out')],{provider});
+ assert.equal(calls,6);assert.equal(result.runs.filter(r=>r.status==='complete').length,6);assert.ok(Math.abs(result.spent-.06)<1e-9);
+ assert.equal(config.roles.judge.max_output_tokens,8192);
+}));
+
+async function pairFiles(dir,ids=['S08']) {
+ const paths=[resolve(dir,'a.json'),resolve(dir,'b.json')];
+ for(const [index,path] of paths.entries())await writeFile(path,JSON.stringify({version:`private-version-${index}`,runs:ids.map(id=>({...catalog.scenarios[id],checks:{C03:{score:index}},turns:[{student:`保存した質問${index}`,assistant:`保存した回答${index}`,calls:[],seconds:2},{student:'範囲外の質問',assistant:'範囲外の返事',calls:[]}]}))}));
+ return paths;
+}
+
+test('pairwise reverses candidates, maps votes back and uses existing mode criteria on saved text only',async()=>temp(async dir=>{
+ const [a,b]=await pairFiles(dir);const before=await readFile(a,'utf8');
+ const provider=fakeProvider({pairwiseVotes:['A','B']}),json=provider.json.bind(provider),seen=[];
+ provider.request=()=>{throw new Error('subject must not run');};
+ provider.json=async(model,messages,reasoning,role)=>{assert.equal(role,'judge');seen.push(JSON.parse(messages[1].content));return json(model,messages,reasoning,role);};
+ const result=await main(['--fake','--pairwise',a,'--against',b,'--turns','1','--output',resolve(dir,'out')],{provider,subjectFactory:()=>{throw new Error('subject must not run');}});
+ assert.equal(result.pairs[0].winner,'A');assert.equal(seen.length,2);
+ assert.deepEqual(seen[0].candidates.A.turns,[{student:'保存した質問0',assistant:'保存した回答0'}]);
+ assert.deepEqual(seen[0].candidates.B,seen[1].candidates.A);assert.deepEqual(seen[0].candidates.A,seen[1].candidates.B);
+ assert.ok(!seen[0].criteria.some(c=>['C01','C02','C05','C17'].includes(c.id)));assert.ok(seen[0].criteria.some(c=>c.id==='C04'));
+ assert.ok(!JSON.stringify(seen).includes('private-version'));assert.ok(!JSON.stringify(seen).includes('範囲外'));
+ assert.equal(await readFile(a,'utf8'),before);
+ const text=await readFile(resolve(dir,'out/report.md'),'utf8');assert.match(text,/偽物/);assert.match(text,/A: 1/);
+}));
+
+test('pairwise disagreement and stable ties become ties, while a stable B win maps correctly',async()=>temp(async dir=>{
+ const [a,b]=await pairFiles(dir);
+ for(const [votes,winner] of [[['A','A'],'tie'],[['B','B'],'tie'],[['tie','A'],'tie'],[['tie','tie'],'tie'],[['B','A'],'B']]) {
+  const result=await main(['--fake','--pairwise',a,'--against',b,'--output',resolve(dir,'out')],{provider:fakeProvider({pairwiseVotes:votes})});
+  assert.equal(result.pairs[0].status,'complete');assert.equal(result.pairs[0].winner,winner);
+ }
+}));
+
+test('pairwise invalid votes retry once; persistent invalid output is incomplete, not a tie',async()=>temp(async dir=>{
+ const [a,b]=await pairFiles(dir);const base=['--fake','--pairwise',a,'--against',b,'--output',resolve(dir,'out')];
+ const result=await main(base,{provider:fakeProvider({pairwiseVotes:[{winner:'bad'},'A','B']})});assert.equal(result.pairs[0].winner,'A');
+ const exitCode=process.exitCode;
+ try {
+  const failed=await main(base,{provider:fakeProvider({pairwiseVotes:[{winner:'bad'},{winner:'bad'}]})});
+  assert.equal(failed.pairs[0].status,'incomplete');assert.equal(failed.pairs[0].winner,null);
+ }finally{process.exitCode=exitCode;}
+}));
+
+test('pairwise budget is shared across both orders and all pairs; a missing second vote is unscored',async()=>temp(async dir=>{
+ const {savedJudgeConfig}=await import('../eval/saved-judge.mjs');
+ const [a,b]=await pairFiles(dir,['S08','S15']);let calls=0;
+ const provider=new OpenRouter(savedJudgeConfig(catalog.config,.07),'synthetic',async()=>{
+  calls++;return new Response(JSON.stringify({usage:{cost:.04},choices:[{finish_reason:'stop',message:{content:JSON.stringify({winner:'A',reason:'synthetic'})}}]}));
+ });
+ const exitCode=process.exitCode;
+ try {
+  const result=await main(['--fake','--pairwise',a,'--against',b,'--criteria','C04','--budget','.07','--output',resolve(dir,'out')],{provider});
+  assert.equal(calls,1);assert.equal(result.spent,.04);assert.equal(result.pairs[0].status,'incomplete');assert.equal(result.pairs[0].winner,null);assert.equal(result.pairs[0].votes.length,1);assert.equal(result.pairs[1].status,'not_run');
+ }finally{process.exitCode=exitCode;}
+}));
+
+test('pairwise rejects mismatched contexts and invalid flags before any model call',async()=>temp(async dir=>{
+ const [a,b]=await pairFiles(dir);const provider=fakeProvider();provider.json=()=>{throw new Error('must validate before communication');};
+ const base=['--fake','--pairwise',a,'--against',b,'--output',resolve(dir,'out')];
+ for(const extra of [['--turns','0'],['--criteria','C17'],['--criteria','C01'],['--budget','0'],['--rejudge',a],['--scenario','S99']])await assert.rejects(main([...base,...extra],{provider}));
+ const file=JSON.parse(await readFile(b,'utf8'));file.runs[0].task='html-page';await writeFile(b,JSON.stringify(file));
+ await assert.rejects(main(base,{provider}),/同じ場面/);
+}));
+
+test('fake pairwise CLI writes new results without a model key',async()=>temp(async dir=>{
+ const [a,b]=await pairFiles(dir);
+ const result=spawnSync(process.execPath,[resolve('eval/cli.mjs'),'--fake','--pairwise',a,'--against',b,'--turns','1','--output',resolve(dir,'out')],{encoding:'utf8',env:{PATH:process.env.PATH},timeout:10000});
+ assert.equal(result.status,0,result.stderr);assert.match(await readFile(resolve(dir,'out/report.md'),'utf8'),/引き分け: 1/);
+}));
+
+test('saved-conversation default outputs stay in repository eval/runs regardless of cwd or input location',async()=>temp(async dir=>{
+ const {dirname,basename}=await import('node:path');
+ const {readdir}=await import('node:fs/promises');
+ const [a,b]=await pairFiles(dir),outputs=[];
+ const cli=resolve(ROOT,'cli.mjs');
+ try {
+  for(const [kind,args] of [['rejudge',['--rejudge',a]],['pairwise',['--pairwise',a,'--against',b]]]) {
+   const result=spawnSync(process.execPath,[cli,'--fake',...args,'--criteria','C04','--turns','1'],{cwd:dir,encoding:'utf8',env:{PATH:process.env.PATH},timeout:10000});
+   assert.equal(result.status,0,result.stderr);
+   const match=result.stdout.match(/保存しました: (.+\/report\.md)/);assert.ok(match,result.stdout);
+   const reportPath=match[1],output=dirname(reportPath);outputs.push(output);
+   assert.equal(dirname(output),resolve(ROOT,'runs'));
+   assert.ok(basename(output).startsWith(`${kind}-`));
+   assert.equal(execFileSync('git',['check-ignore',reportPath],{cwd:resolve(ROOT,'..'),encoding:'utf8'}).trim(),reportPath);
+   assert.match(await readFile(reportPath,'utf8'),/偽物/);
+   const files=await readdir(resolve(output,'runs'));assert.equal(files.length,1);assert.ok(files[0].startsWith(`${kind}-`));
+  }
+  assert.deepEqual((await readdir(dir)).sort(),['a.json','b.json']);
+ }finally{await Promise.all(outputs.map(output=>rm(output,{recursive:true,force:true})));}
+}));

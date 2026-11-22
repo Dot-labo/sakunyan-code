@@ -12,7 +12,7 @@ node eval/cli.mjs --daily
 node eval/cli.mjs --matrix --tasks python-name --modes advisor,tutor
 ```
 
-実行前に `npm run build` が必要です。`dist/` がない場合、`--fake` を含む CLI はビルドを案内して停止します。暗号化済み `.env.eval` の開発用キーは、上記の dotenvx コマンドで実行プロセスに渡します。復号鍵を探したり、新しく作ったりしないでください。
+通常の会話生成は実行前に `npm run build` が必要です。`dist/` がない場合、`--fake` を含む会話生成はビルドを案内して停止します。保存会話の再採点・ペア比較ではビルド済みの本体は不要です。暗号化済み `.env.eval` の開発用キーは、上記の dotenvx コマンドで実行プロセスに渡します。復号鍵を探したり、新しく作ったりしないでください。
 
 実モデルには **`SAKUNYAN_EVAL_OPENROUTER_KEY` だけ**を使います。未設定なら実行前に止まります。他のキーや保存済み認証情報は使いません。キーを引数・YAML・レポートに書かないでください。
 
@@ -47,3 +47,13 @@ node eval/cli.mjs --matrix --tasks python-name --modes advisor,tutor
 出力は `report.md` と `runs/*.json`。生の記録の `first_request_tools` は、最初のモデル通信で実際に送った道具名です（通信前の失敗は null、道具なしの通信は空配列）。各 turn にもセッション最初の送信一覧を残すため、フォルダ移動後のセッションも確認できます。`runs/` は git 除外です。`--output /tmp/eval-preview` で出力先を変更できます。偽物は `latest-fake.json` に分離され、品質評価と表示しません。`--fake` も実際の worker と本体ランタイムを使い、ペルソナの OS 差し替えを通します。外部モデルへの通信だけを固定応答に置き換えます。全シナリオ未完了や失敗を合格として扱いません。初回は前回比較不可です。実モデルの会話をレポートへ載せる前には、個人情報などがないか確認してください。
 
 テストは `npm test`（ビルド込み）、評価のみならビルド後に `node --test test/eval.test.js`。APIキーは不要です。作業フォルダ・隔離 HOME・子プロセスは実行終了時に片付けます。
+
+C04 は両モードとも1500字を超える返事が全体の10%を超えた場合だけ減点します（本文を Unicode コードポイントで数え、思考は含めません）。[ブラインド結果](https://github.com/Dot-labo/sakunyan-code/issues/62#issuecomment-6891624696)と[追記](https://github.com/Dot-labo/sakunyan-code/issues/62#issuecomment-6891645883)に合わせ、1089字や別の例でヒントを出した446字は長さだけで減点しません。
+
+`node eval/cli.mjs --rejudge <runs/*.json> --criteria C04,C03 --turns 1 --budget 0.2 --output /tmp/rejudge` で保存会話を現在の基準で再採点します（`--fake` で無料確認）。
+`--criteria` 省略時は有効な全採点基準、`--turns` 省略時は全往復を使い、指定時は先頭N往復だけを機械・判定者の両方に渡します。生徒・被験者モデルは呼びません。
+元ファイルは変更せず、新しい `runs/rejudge-*.json` と `report.md` に出力します（出力先省略時はリポジトリの `eval/runs/rejudge-<uuid>/`）。ゴール・最終ファイルは再評価せず、費用・使用量は今回の判定者分だけです。
+
+`node eval/cli.mjs --pairwise <A版のruns.json> --against <B版のruns.json> --scenario S08,S15 --turns 1 --budget 0.5 --output /tmp/pairwise` で、同じ場面・モード・課題・ペルソナの保存会話を比較します（`--scenario` 省略時は全場面、`--turns` 省略時は全往復、`--fake` で無料確認）。判定観点は対象モードの既存criteria（`--criteria C03,C04` 等で限定可）で、正順・逆順の2回だけ判定し、元のA/Bへ戻した票が一致しなければ引き分けとします。生徒・被験者モデルは呼ばず、新しい `runs/pairwise-*.json` と `report.md` にA/B/引き分け・短い理由・費用を保存します。未完了や未実行は引き分けに含めません。出力先省略時はリポジトリの `eval/runs/pairwise-<uuid>/` に保存します。両方の既定出力先はgit除外済みの `eval/runs/` 配下で、今いるフォルダや入力ファイルの場所には依存しません。
+
+再採点とペア比較の判定者出力は推論込み8192トークンを上限とします（通常の会話評価は従来どおり）。料金予約は、この実際に送信する出力上限と既存の入力・価格上限から計算し、各応答の実費を同じ予算へ積算します。小さな予算を32768トークン分の予約で使い切ることを防ぎ、出力上限に達した場合は未完了にして採点しません。C17は比較で差が出なかったため取り下げました。番号は再利用しません。
