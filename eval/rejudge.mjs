@@ -7,6 +7,7 @@ import { machineCheck, scoreRun } from './checks.mjs';
 import { OpenRouter, BudgetStop, InvalidModelJSON, validateJudgment } from './provider.mjs';
 import { fakeProvider } from './fake.mjs';
 import { report } from './report.mjs';
+import { savedJudgeConfig } from './saved-judge.mjs';
 
 // Rejudging never creates a subject, student, sandbox, or project filesystem.
 export async function rejudge(options,catalog,injectedProvider) {
@@ -22,8 +23,7 @@ export async function rejudge(options,catalog,injectedProvider) {
     if(!['advisor','tutor'].includes(run.mode)||!catalog.personas[run.persona]||!catalog.tasks[run.task]||!Array.isArray(run.turns)||!run.turns.length||run.turns.some(t=>typeof t.student!=='string'||typeof t.assistant!=='string'))throw new Error('保存会話のモード・ペルソナ・課題・turns が不正です');
     weights(selected,run.criteria,run.mode);
   }
-  const config={...catalog.config,budget_usd:Number(options['--budget']??catalog.config.budget_usd)};
-  if(!Number.isFinite(config.budget_usd)||config.budget_usd<=0)throw new Error('--budget は正の数にしてください');
+  const config=savedJudgeConfig(catalog.config,options['--budget']??catalog.config.budget_usd);
   const key=process.env.SAKUNYAN_EVAL_OPENROUTER_KEY;
   const needsJudge=saved.runs.some(r=>Object.values(selected).some(c=>c.method==='judge'&&weights(selected,r.criteria,r.mode)[c.id]>0));
   if(needsJudge&&!options['--fake']&&!injectedProvider&&!key)throw new Error('評価用のキー SAKUNYAN_EVAL_OPENROUTER_KEY がありません');

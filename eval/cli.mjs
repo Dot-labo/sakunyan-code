@@ -9,17 +9,23 @@ import { runScenario } from './runner.mjs';
 import { report } from './report.mjs';
 import { fakeProvider } from './fake.mjs';
 import { rejudge } from './rejudge.mjs';
+import { pairwise } from './pairwise.mjs';
 export async function main(args=process.argv.slice(2),{provider:injectedProvider,subjectFactory}={}) {
   const options={};
   for(let i=0;i<args.length;i++) {
     const key=args[i];
     if(['--fake','--daily','--matrix','--validate','--help'].includes(key))options[key]=true;
-    else if(['--scenario','--personas','--tasks','--modes','--fixture','--budget','--output','--rejudge','--criteria','--turns'].includes(key)&&args[i+1]&&!args[i+1].startsWith('--'))options[key]=args[++i];
+    else if(['--scenario','--personas','--tasks','--modes','--fixture','--budget','--output','--rejudge','--criteria','--turns','--pairwise','--against'].includes(key)&&args[i+1]&&!args[i+1].startsWith('--'))options[key]=args[++i];
     else throw new Error(`知らない引数、または値がありません: ${key}`);
   }
-  if(options['--help']) {console.log('node eval/cli.mjs [--validate | --fake | --daily | --scenario S01,S02 | --matrix --tasks python-name --personas P1,P2 --modes advisor,tutor --fixture python-name] [--rejudge <runs/*.json> --criteria C04,C17 --turns 1] [--budget 0.8] [--output <folder>]');return;}
+  if(options['--help']) {console.log('node eval/cli.mjs [--validate | --fake | --daily | --scenario S01,S02 | --matrix --tasks python-name --personas P1,P2 --modes advisor,tutor --fixture python-name] [--rejudge <runs/*.json> --criteria C04,C03 --turns 1] [--pairwise <A.json> --against <B.json> --scenario S08 --turns 1] [--budget 0.8] [--output <folder>]');return;}
   const catalog=await loadCatalog();
   if(options['--validate']){console.log(`部品の検査 OK: ${Object.keys(catalog.personas).length}人 / ${Object.keys(catalog.scenarios).length}本 / ${Object.keys(catalog.criteria).length}基準`);return;}
+  if(options['--pairwise']) {
+    if(['--rejudge','--daily','--matrix','--personas','--tasks','--modes','--fixture'].some(k=>options[k]))throw new Error('--pairwise と会話生成・再採点の引数は併用できません');
+    return pairwise(options,catalog,injectedProvider);
+  }
+  if(options['--against'])throw new Error('--against には --pairwise が必要です');
   if(options['--rejudge']) {
     if(['--scenario','--daily','--matrix','--personas','--tasks','--modes','--fixture'].some(k=>options[k]))throw new Error('--rejudge と会話生成の引数は併用できません');
     return rejudge(options,catalog,injectedProvider);
